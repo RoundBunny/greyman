@@ -1,0 +1,6 @@
+prefix_rule(
+    pattern = ["greyman"],
+    decision = "allow",
+    justification = "greyman drives a local Docker browser: needs loopback, the Docker socket and its state file outside the sandbox",
+    match = ["greyman snap", "greyman click e12", "greyman up --watch", "greyman down --purge", "greyman config set NAV_GAP 1000-2000"],
+)

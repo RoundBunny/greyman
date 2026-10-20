@@ -1,0 +1,17 @@
+{
+  "name": "greyman-daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "linkedom": "0.18.13",
+    "playwright": "1.64.0",
+    "turndown": "7.2.4"
+  }
+}
