@@ -108,6 +108,7 @@ func TestValidators(t *testing.T) {
 		{"SNAP_MAX_TEXT", []string{"1", "200"}, []string{"0", "abc"}},
 		{"ACTION_TIMEOUT_MS", []string{"5000"}, []string{"0", "-1"}},
 		{"NAV_TIMEOUT_MS", []string{"30000"}, []string{"0", "5s"}},
+		{"DEFAULT_WAIT", []string{"1", "3000"}, []string{"0", "-1", "3s", "1.5"}},
 		{"PROXY", []string{"proxy:3128", "http://u:p@proxy:3128", "socks5://127.0.0.1:1080"}, []string{"http://", "://x", "http://[::1"}},
 		{"LOCALE", []string{"en-US", "fr", "zh-Hant-TW"}, []string{"en_US", "e", "en-"}},
 		{"TZ", []string{"America/Chicago", "UTC"}, []string{"Mars/Base", "Local", "CST"}},
@@ -169,7 +170,7 @@ func TestContainerEnv(t *testing.T) {
 	}
 	got := strings.Join(ContainerEnv(vals), "\n")
 	for _, want := range []string{
-		"GREYMAN_NAV_GAP=3000-6000", "GREYMAN_ACTION_TIMEOUT_MS=5000", "GREYMAN_NAV_TIMEOUT_MS=30000",
+		"GREYMAN_NAV_GAP=3000-6000", "GREYMAN_ACTION_TIMEOUT_MS=5000", "GREYMAN_NAV_TIMEOUT_MS=30000", "GREYMAN_DEFAULT_WAIT=3000",
 		"GREYMAN_SNAP_MAX_TEXT=200", "GREYMAN_PROXY=http://u:p@proxy:3128", "GREYMAN_HEADLESS=1",
 		"GREYMAN_WATCH=0", "GREYMAN_SCREEN_W=1920", "TZ=Europe/Paris", "GREYMAN_LOCALE=en-GB",
 		"GREYMAN_USE_GEOLOCATION=0", "GREYMAN_GEOLOCATION_COORD_LAT=0", "GREYMAN_GEOLOCATION_COORD_LON=0",

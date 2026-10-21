@@ -29,13 +29,17 @@ type Client struct {
 // the daemon went silent. It is distinct from an APIError, where the daemon answered.
 var ErrUnreachable = errors.New("daemon unreachable")
 
-// Response is the daemon's JSON envelope. PNG is base64 on the wire; encoding/json
-// decodes it into raw bytes.
+// Response is the daemon's JSON envelope. PNG and File are base64 on the wire;
+// encoding/json decodes them into raw bytes.
 type Response struct {
-	OK    bool   `json:"ok"`
-	Text  string `json:"text"`
-	PNG   []byte `json:"png"`
-	Error string `json:"error"`
+	OK          bool   `json:"ok"`
+	Text        string `json:"text"`
+	PNG         []byte `json:"png"`
+	File        []byte `json:"file"`
+	ContentType string `json:"content_type"`
+	Error       string `json:"error"`
+	// Version is the build that answered (X-Greyman-Version); empty from an older daemon.
+	Version string `json:"-"`
 }
 
 // APIError is an error reported by the daemon (as opposed to a transport failure).
@@ -129,5 +133,6 @@ func (c *Client) Do(ctx context.Context, name string, args map[string]any) (*Res
 		}
 		return nil, &APIError{Status: res.StatusCode, Msg: msg}
 	}
+	r.Version = res.Header.Get("X-Greyman-Version")
 	return &r, nil
 }

@@ -22,11 +22,13 @@ test('loadConfig: timeouts and snapshot text limit default and can be set', () =
   assert.equal(defaults.actionTimeoutMs, 5000);
   assert.equal(defaults.navTimeoutMs, 30000);
   assert.equal(defaults.snapMaxText, 200);
-  const set = cfg({ GREYMAN_ACTION_TIMEOUT_MS: '1000', GREYMAN_NAV_TIMEOUT_MS: '60000', GREYMAN_SNAP_MAX_TEXT: '400' });
+  assert.equal(defaults.defaultWaitMs, 3000);
+  const set = cfg({ GREYMAN_ACTION_TIMEOUT_MS: '1000', GREYMAN_NAV_TIMEOUT_MS: '60000', GREYMAN_SNAP_MAX_TEXT: '400', GREYMAN_DEFAULT_WAIT: '1500' });
   assert.equal(set.actionTimeoutMs, 1000);
   assert.equal(set.navTimeoutMs, 60000);
   assert.equal(set.snapMaxText, 400);
-  for (const name of ['GREYMAN_ACTION_TIMEOUT_MS', 'GREYMAN_NAV_TIMEOUT_MS', 'GREYMAN_SNAP_MAX_TEXT']) {
+  assert.equal(set.defaultWaitMs, 1500);
+  for (const name of ['GREYMAN_ACTION_TIMEOUT_MS', 'GREYMAN_NAV_TIMEOUT_MS', 'GREYMAN_SNAP_MAX_TEXT', 'GREYMAN_DEFAULT_WAIT']) {
     for (const bad of ['0', '-1', 'abc', '1.5']) {
       assert.throws(() => cfg({ [name]: bad }), new RegExp(name), `${name}=${bad}`);
     }
@@ -81,7 +83,7 @@ after(() => server.close());
 const call = async (name, { method = 'POST', token = TOKEN } = {}) => {
   const res = await fetch(`${base}/v1/${name}`, { method, headers: { authorization: `Bearer ${token}` } });
   const raw = await res.text();
-  return { status: res.status, raw, body: JSON.parse(raw) };
+  return { status: res.status, raw, body: JSON.parse(raw), version: res.headers.get('x-greyman-version') };
 };
 
 test('fast commands answer with a plain JSON response', async () => {
@@ -165,4 +167,16 @@ test('a command that completes is not aborted', async () => {
   await sleep(30);
   assert.equal(signal.aborted, false);
   s.close();
+});
+
+test('every response names the build that answered, kept-alive ones and errors too', async () => {
+  assert.equal((await call('status', { method: 'GET' })).version, 'dev');
+  assert.equal((await call('slow')).version, 'dev');
+  assert.equal((await call('user')).version, 'dev');
+  assert.equal((await call('status', { method: 'GET', token: 'wrong' })).version, 'dev');
+});
+
+test('loadConfig: the version comes from the image, default dev', () => {
+  assert.equal(loadConfig({ GREYMAN_TOKEN: TOKEN }).version, 'dev');
+  assert.equal(loadConfig({ GREYMAN_TOKEN: TOKEN, GREYMAN_VERSION: 'v1.2.3' }).version, 'v1.2.3');
 });

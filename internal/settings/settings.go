@@ -51,6 +51,8 @@ var All = []Setting{
 		Doc: "ms to wait for an element before an action fails"},
 	{Key: "NAV_TIMEOUT_MS", Env: "GREYMAN_NAV_TIMEOUT_MS", Default: "30000", Validate: validPositiveInt,
 		Doc: "ms to wait for a page to load before navigation fails"},
+	{Key: "DEFAULT_WAIT", Env: "GREYMAN_DEFAULT_WAIT", Default: "3000", Validate: validPositiveInt,
+		Doc: "ms the default --wait (idle) lasts on snap, open and every action; --wait-timeout overrides it per command"},
 	{Key: "MAX_CHARS", Env: "GREYMAN_MAX_CHARS", Default: "24000", Validate: validPositiveInt,
 		Doc: "default character limit for snap and read"},
 	{Key: "SNAP_MAX_TEXT", Env: "GREYMAN_SNAP_MAX_TEXT", Default: "200", Validate: validPositiveInt,

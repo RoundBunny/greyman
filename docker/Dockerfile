@@ -22,6 +22,11 @@ RUN npm ci --omit=dev \
     && npx playwright install --with-deps $FLAGS "$BROWSER" \
     && rm -rf /var/lib/apt/lists/*
 
+# The build the CLI compares itself with (make image passes VERSION). After the slow
+# layers above, so a new version only rebuilds from here.
+ARG VERSION=dev
+ENV GREYMAN_VERSION=${VERSION}
+
 COPY daemon/src ./src
 COPY docker/entrypoint.sh /entrypoint.sh
 

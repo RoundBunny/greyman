@@ -3,8 +3,10 @@
 IMAGE ?= greyman:latest
 BROWSER ?= chromium
 PLATFORM ?=
-# Stamped into the binary and recorded by `greyman install`.
-VERSION ?= dev
+# Stamped into the binary and baked into the image, which the CLI compares at runtime to
+# catch a container older than the binary. Committed sources give the commit (+ -dirty);
+# outside a git checkout it is dev.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: build test image deps
 
@@ -21,5 +23,5 @@ test:
 	cd daemon && npm test
 
 image:
-	docker build -f docker/Dockerfile --build-arg BROWSER=$(BROWSER) \
+	docker build -f docker/Dockerfile --build-arg BROWSER=$(BROWSER) --build-arg VERSION=$(VERSION) \
 		$(if $(PLATFORM),--platform $(PLATFORM)) -t $(IMAGE) .

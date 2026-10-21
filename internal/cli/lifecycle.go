@@ -173,6 +173,7 @@ func printStatus(ctx context.Context, e *Env, st *state.State) error {
 	if err != nil {
 		return explain(ctx, err)
 	}
+	checkVersion(resp.Version)
 	fmt.Fprintln(e.Out, resp.Text+watchSuffix(st))
 	return nil
 }

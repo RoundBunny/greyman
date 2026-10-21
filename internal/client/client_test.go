@@ -168,3 +168,27 @@ func TestCancelledContextIsNotUnreachable(t *testing.T) {
 		t.Fatal("server never saw the connection close")
 	}
 }
+
+func TestDoReportsTheDaemonVersionAndFileFields(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Greyman-Version", "v9")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "file": base64.StdEncoding.EncodeToString([]byte("img")), "content_type": "image/png"})
+	})
+	r, err := c.Do(context.Background(), "save", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Version != "v9" || string(r.File) != "img" || r.ContentType != "image/png" {
+		t.Fatalf("response = %+v", r)
+	}
+}
+
+func TestDoLeavesVersionEmptyForAnOlderDaemon(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "text": "ok"})
+	})
+	r, err := c.Do(context.Background(), "status", nil)
+	if err != nil || r.Version != "" {
+		t.Fatalf("response = %+v, err %v", r, err)
+	}
+}

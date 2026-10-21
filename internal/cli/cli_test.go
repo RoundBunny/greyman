@@ -16,6 +16,7 @@ import (
 
 	"greyman/internal/config"
 	"greyman/internal/state"
+	"greyman/internal/version"
 )
 
 type recorded struct {
@@ -31,6 +32,7 @@ func fakeDaemon(t *testing.T, reply map[string]any) *[]recorded {
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		got = append(got, recorded{r.URL.Path, body})
+		w.Header().Set("X-Greyman-Version", version.Version)
 		_ = json.NewEncoder(w).Encode(reply)
 	}))
 	t.Cleanup(srv.Close)

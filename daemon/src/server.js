@@ -7,6 +7,7 @@ import { parseGeolocation } from './geolocation.js';
 import { parseProxy } from './proxy.js';
 import { DEFAULT_GAPS, createLimiter, parseRange } from './ratelimit.js';
 import { DEFAULT_MAX_TEXT } from './snapshot.js';
+import { DEFAULT_WAIT_MS } from './wait.js';
 
 const env = process.env;
 
@@ -26,6 +27,7 @@ export function loadConfig(e = env) {
   if (!token) throw new Error('GREYMAN_TOKEN is required');
   return {
     token,
+    version: e.GREYMAN_VERSION || 'dev', // baked into the image; the CLI compares it with its own
     host: e.GREYMAN_HOST ?? '0.0.0.0', // inside the container; the host publishes it to loopback only
     port: Number(e.GREYMAN_PORT ?? 7777),
     headless: e.GREYMAN_HEADLESS === '1',
@@ -38,6 +40,7 @@ export function loadConfig(e = env) {
     snapMaxText: positiveInt('GREYMAN_SNAP_MAX_TEXT', e.GREYMAN_SNAP_MAX_TEXT, DEFAULT_MAX_TEXT),
     actionTimeoutMs: positiveInt('GREYMAN_ACTION_TIMEOUT_MS', e.GREYMAN_ACTION_TIMEOUT_MS, 5000),
     navTimeoutMs: positiveInt('GREYMAN_NAV_TIMEOUT_MS', e.GREYMAN_NAV_TIMEOUT_MS, 30000),
+    defaultWaitMs: positiveInt('GREYMAN_DEFAULT_WAIT', e.GREYMAN_DEFAULT_WAIT, DEFAULT_WAIT_MS),
     gaps: {
       nav: parseRange('GREYMAN_NAV_GAP', e.GREYMAN_NAV_GAP, DEFAULT_GAPS.nav),
       act: parseRange('GREYMAN_ACT_GAP', e.GREYMAN_ACT_GAP, DEFAULT_GAPS.act),
@@ -49,6 +52,8 @@ const digest = (s) => createHash('sha256').update(s).digest();
 
 export function createServer(ctx, { handlers = commands, keepaliveMs = KEEPALIVE_MS } = {}) {
   const expected = digest(ctx.cfg.token);
+  // Every response says which build answered, so a CLI can notice a stale container.
+  const base = { 'x-greyman-version': ctx.cfg.version ?? 'dev' };
   const authed = (req) => {
     const m = /^Bearer (.+)$/.exec(req.headers.authorization ?? '');
     return m !== null && timingSafeEqual(digest(m[1]), expected);
@@ -58,7 +63,7 @@ export function createServer(ctx, { handlers = commands, keepaliveMs = KEEPALIVE
   const send = (res, status, body) => {
     const data = JSON.stringify(body);
     if (res.headersSent) return res.end(data);
-    res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) });
+    res.writeHead(status, { ...base, 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) });
     res.end(data);
   };
 
@@ -66,7 +71,7 @@ export function createServer(ctx, { handlers = commands, keepaliveMs = KEEPALIVE
   // write a space every keepalive interval: leading whitespace is valid JSON.
   const keepalive = (res) => {
     const timer = setInterval(() => {
-      if (!res.headersSent) res.writeHead(200, { 'content-type': 'application/json' });
+      if (!res.headersSent) res.writeHead(200, { ...base, 'content-type': 'application/json' });
       res.write(' ');
     }, keepaliveMs);
     res.on('close', () => clearInterval(timer));

@@ -7,12 +7,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"greyman/internal/client"
 	"greyman/internal/docker"
 	"greyman/internal/state"
+	"greyman/internal/version"
 )
 
 type Env struct {
@@ -42,14 +45,16 @@ func commands() []command {
 		{"up", "greyman up [--headless | --watch] [--proxy URL] [--platform amd64] [--image NAME]", "start the browser container (--watch: live view URL)", cmdUp},
 		{"down", "greyman down [--purge]", "stop the container (--purge also wipes cookies/profile)", cmdDown},
 		{"status", "greyman status", "show container/browser state", cmdStatus},
-		{"open", "greyman open <url> [--tab tN] [--snap]", "navigate the active tab", cmdOpen},
-		{"snap", "greyman snap [--tab tN] [--max N]", "compact accessibility tree with refs (primary view)", cmdSnap},
-		{"click", "greyman click <ref> [--tab tN] [--snap]", "click an element by ref", cmdClick},
-		{"type", "greyman type <ref> <text> [--submit] [--tab tN] [--snap]", "type into an element (replaces content)", cmdType},
-		{"scroll", "greyman scroll <up|down> [n] [--tab tN] [--snap]", "scroll n screens (default 1)", cmdScroll},
-		{"back", "greyman back [--tab tN] [--snap]", "go back in history", cmdBack},
-		{"read", "greyman read [--tab tN] [--max N]", "main page content as markdown (when snap is not enough)", cmdRead},
-		{"shot", "greyman shot [ref] [-o path] [--full] [--tab tN]", "screenshot to a PNG file; prints the path", cmdShot},
+		{"open", "greyman open <url> [--tab tN] [--snap] [--wait W]", "navigate the active tab", cmdOpen},
+		{"snap", "greyman snap [--modal] [--grep RE] [--role R] [--within REF|RE] [--max N] [--wait W] [--tab tN]", "compact accessibility tree with refs (primary view)", cmdSnap},
+		{"click", "greyman click <ref> | --name TEXT [--role R] [--exact] [--nth N] [--tab tN] [--snap] [--wait W]", "click an element by ref or by name", cmdClick},
+		{"type", "greyman type <ref> <text> [--submit] [--tab tN] [--snap] [--wait W]", "type into an element (replaces content)", cmdType},
+		{"scroll", "greyman scroll <up|down> [n] [--tab tN] [--snap] [--wait W]", "scroll n screens (default 1)", cmdScroll},
+		{"back", "greyman back [--tab tN] [--snap] [--wait W]", "go back in history", cmdBack},
+		{"read", "greyman read [ref] [--modal] [--tab tN] [--max N]", "page, dialog or element content as markdown (when snap is not enough)", cmdRead},
+		{"shot", "greyman shot [ref] [--modal] [--full] [--max-width N] [-o path] [--tab tN]", "screenshot to a PNG file; prints the path", cmdShot},
+		{"save", "greyman save <ref> [-o path] [--url] [--tab tN]", "download the image behind a ref at full size; prints the path", cmdSave},
+		{"log", "greyman log [--errors] [--max N] [--clear] [--tab tN]", "console errors and failed requests of a tab", cmdLog},
 		{"close", "greyman close [--tab tN]", "close a tab", cmdClose},
 		{"set", "greyman set <option> <args> [--setconfig]", "change a setting on the running browser, e.g. geolocation (--setconfig also saves it)", cmdSet},
 		{"config", "greyman config [list | get KEY | set KEY VALUE | unset KEY]", "show or change settings (applied on the next `up`)", cmdConfig},
@@ -181,7 +186,32 @@ func call(ctx context.Context, name string, args map[string]any) (*client.Respon
 		return nil, err
 	}
 	resp, err := c.Do(ctx, name, args)
+	if err == nil {
+		checkVersion(resp.Version)
+	}
 	return resp, explain(ctx, err)
+}
+
+var (
+	// versionWarn receives the version mismatch warning; tests swap it.
+	versionWarn io.Writer = os.Stderr
+	versionOnce sync.Once
+)
+
+// checkVersion warns, once per process, when the container answering was built from a
+// different version than this CLI: the two speak an unversioned API and must be pinned
+// together, so a stale container shows up as missing commands or odd behavior.
+func checkVersion(daemon string) {
+	if daemon == version.Version {
+		return
+	}
+	versionOnce.Do(func() {
+		running := "version " + daemon
+		if daemon == "" {
+			running = "a build that predates version reporting"
+		}
+		fmt.Fprintf(versionWarn, "warning: greyman is %s but the container runs %s; run `greyman down`, rebuild or pull the matching image, then `greyman up`\n", version.Version, running)
+	})
 }
 
 // explain replaces "connection refused" with the likely cause when the container is

@@ -31,32 +31,49 @@ greyman up              # start the container (headed Chromium on a virtual disp
 greyman up --watch      # same, plus a view-only live view; prints a watch=<url> to open
 greyman open news.ycombinator.com
 greyman snap            # compact accessibility tree, refs like [e12]
-greyman click e12
-greyman read            # fallback: page content as markdown
-greyman shot            # fallback: PNG screenshot, prints its path
+greyman click e12       # or: greyman click --name "Add to cart"
+greyman snap --grep price   # matching lines plus their ancestors; also --role, --within, --modal
+greyman read            # fallback: page content as markdown (--modal: open dialogs)
+greyman shot            # fallback: PNG screenshot, prints its path (--modal, --max-width N)
+greyman save e30        # download the image behind a ref at full size, prints its path
+greyman log --errors    # console errors and failed requests, for when a page misbehaves
 greyman down            # stop; add --purge to also delete cookies/profile
 ```
 
 `greyman install` writes a skill into each agent's user-level config so the agent knows how to use greyman: `claude`, `codex`, `cursor`, `copilot`, or `all` (one name per call; no name installs for the agents it detects). For any other agent, `greyman install other [dir]` writes `SKILL.md` and `REQUIREMENTS.md` (what the host must permit) into `dir` (default: the current directory). Codex also gets `~/.codex/rules/greyman.rules`; an existing file is kept unless you pass `--force`. Until at least one agent is installed, every command except `help`, `install`, `down` and `config` refuses to run.
 
-`greyman help` lists every command. Action commands print one status line and accept `--tab tN` and `--snap` (append a fresh snapshot).
+`greyman help` lists every command. Action commands print one status line and accept `--tab tN`, `--snap` (append a fresh snapshot) and `--wait idle|text=TEXT|css=SELECTOR|none` (wait for the page; default `idle`, capped at `DEFAULT_WAIT`, 3000 ms unless `--wait-timeout N` overrides it; a timeout shows as `wait=timeout`). `snap` and `open` take the same flags.
 
 `--watch` serves noVNC on `127.0.0.1` only, view-only, headed mode only (it cannot be combined with `--headless`). Run `greyman down` before `up` to change modes: `up` on a running container prints its status and ignores new flags.
 
+## Efficient Use
+
+Greyman offers two main ways to view websites: `shot` or `snap`. Shot is cheaper by a factor of ~4 for most pages. Limiting the snap resolution with `shot --max-width 800` makes this another 4x cheaper, for a total token cost reduction of ~16x. The token costs vary based on myriad factors: context, thinking, loaded skills. The below table gives example figures for snap vs shot costs. The real token cost isn't this high, but the relative amounts are consistent. Using the wikipedia page, my actual billed token costs on Claude Code with Sonnet 5.5 are: snap = 900, shot = 300, shot-max-width-800 = 400.
+
+| Page | Snap chars | Snap tokens | Shot 1919×992 | `shot --max-width 800` |
+|---|---|---|---|---|
+| news.ycombinator.com | 20,244 | ~5.8k | ~1.6k | ~440 |
+| wikipedia.org/wiki/Web_browser | 24,093 (truncated) | ~6.9k+ | ~1.6k | ~440 |
+| github.com/golang/go | 16,946 | ~4.8k | ~1.6k | ~440 |
+| bbc.com/news | 24,021 (truncated) | ~6.9k+ | ~1.6k | ~440 |
+| books.toscrape.com | 16,143 | ~4.6k | ~1.6k | ~440 |
+
 ## Using it from an agent
 
-- Refs from `snap` look like `e12`, or `f5e5` for elements inside frames. They are valid until the next snapshot or navigation; a miss prints `ref ... not found or not actionable; run snap`.
+- Refs from `snap` look like `e12`, or `f5e5` for elements inside frames. They are valid until the next snapshot or navigation. Before acting, `click` and `type` check that the element still has the role and name it had in the snapshot; if not they print `ref ... is gone or changed; run snap` instead of acting on the wrong element.
 - Flags may come before or after arguments. Use `--` before text that starts with `-`: `greyman type e3 --submit -- "-5"`.
-- `snap` covers the whole page and can run to tens of thousands of characters. Cap it with `--max N`, or filter it (`greyman snap | grep -i price`).
+- `snap` covers the whole page and can run to tens of thousands of characters; it cuts at `MAX_CHARS` and says how to get the rest. Dialogs print first so a cut never takes them. Narrow it with `--grep`, `--role`, `--within` or `--modal`; long option lists and runs of identical items are collapsed.
 - `snap` clips long text at 200 characters by default (`SNAP_MAX_TEXT`). Use `read` when you need the full text.
-- Single-page apps may not be rendered when `open` returns. If a snapshot is empty, wait a few seconds and run `snap` again.
+- Single-page apps may not be rendered when `open` returns. `open`, `snap` and every action wait for network idle by default (up to `DEFAULT_WAIT`); for a slow site use `--wait text=...` or `--wait-timeout N`, and `--wait none` to skip the wait.
 - `new_tab=tN` in a status line: the action opened a tab and it is now active. `bg_tab=tN`: a tab opened on its own (popup, ad) and stays in the background; `close --tab tN` dismisses it.
 - Clicks land at a randomized point inside the target. A cookie or consent banner floating over it can swallow the click: close the banner first.
 - Navigations to one origin are spaced 3-6 s apart and actions 0.4-1.2 s (see Configuration), so multi-step tasks take a while by design.
 
 ## Known limitations
 
-- Whole-page snapshots, 200-character text clipping (now adjustable with `SNAP_MAX_TEXT`), `open` returning before the page renders, clicks that fail silently when covered, and no refs on images (the photo in `cheesecake.md` was captured through its clickable gallery element). All found during the cheesecake test and all still open.
+- Snapshots still cover the whole page (filters narrow what is printed, not what the browser walks), `open` can return before a single-page app renders if it stays busy longer than `DEFAULT_WAIT`, and clicks can fail silently when a banner covers them. Text is clipped at 200 characters by default (`SNAP_MAX_TEXT`). Found during the cheesecake test.
+- There is no command to choose an option in a `<select>`.
+- `close` on the only open tab closes the browser and stops the container.
 - Session cookies (no expiry) are dropped across `down`/`up`, as in a normal Chrome quit. Cookies with an expiry survive.
 - `BROWSER=chrome` (real Google Chrome, amd64 only) is untested.
 - `--headless` leaks `HeadlessChrome` in the user agent and an 800x600 screen. Headed is the supported mode.
@@ -88,6 +105,7 @@ Each setting takes the first value found in: a flag of `greyman up`, the `GREYMA
 | `ACT_GAP` | `400-1200` | ms between in-page actions on one origin |
 | `ACTION_TIMEOUT_MS` | `5000` | ms to wait for an element before an action fails |
 | `NAV_TIMEOUT_MS` | `30000` | ms to wait for a page to load |
+| `DEFAULT_WAIT` | `3000` | ms the default `--wait` (idle) lasts on `snap`, `open` and every action; `--wait-timeout` overrides it per command |
 | `MAX_CHARS` | `24000` | cap on `snap`/`read` output |
 | `SNAP_MAX_TEXT` | `200` | `snap` clips any one text to this many characters; `read` is not clipped |
 | `PROXY` | none | upstream proxy URL (`--proxy`) |
