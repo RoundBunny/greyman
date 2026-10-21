@@ -10,7 +10,7 @@ description: Control a containerized Chromium browser from the command line with
 ## Workflow
 
 1. If `greyman status` says it is not running, ask the user to run `greyman up`. Do not start or remove the container yourself unless the user told you to. 
-2. `greyman open <url>`, then `greyman snap` for a acessibility tree or `greyman shot` for a screenshot. 
+2. `greyman open <url>`, then `greyman snap` for an acessibility tree or `greyman shot` for a screenshot. 
 3. Act with `click`, `type`, `scroll`, `back`. `click --name "Use my current location"` finds an element by its name instead (add `--role button`, `--exact` or `--nth N` when several match; it lists them and never picks one for you).
 4. Use `read` when you need full/partial page text as markdown. This can be expensive, so try to only use this when snap or shot aren't sufficient. Beware of character limits when reading full pages.
 
@@ -23,7 +23,7 @@ description: Control a containerized Chromium browser from the command line with
 - Avoid rerunning full snaps when you suspect page content remains mostly unchanged. `snap` offers a few flags to narrow the scope of repeated requests: `--grep, --role, --within, --modal`. `--grep ` matches text, returning the containing line and its ancestors. `--role` returns elements that match the given role. `--within` gives the subtree of the given ref or pattern. These flags can be combined. Prefer using these flags over manually filtering, as greyman does all the heavy lifting without any extra cost. Each `snap` reads the whole page, and filters it to the output. Raise `--max` only if important items are truncated.
 - Snap collapses similar items together as "(+X more options)". Use `read` or `shot` if you suspect an item is hidden.
 - When loading a new website, dismiss any dialog/popup boxes that appear. `snap --modal` prints only the dialogs, and `read --modal` reads them as markdown; plain `read` skips dialogs.
-- `open`, `click`, `type`, `scroll` and `back` print one status line. Append `--snap` or to get a fresh snapshot in the same call instead of a separate `snap`. Do it when you'll need refs next.
+- `open`, `click`, `type`, `scroll` and `back` print one status line. Append `--snap` to get a fresh snapshot in the same call instead of a separate `snap`. Do it when you'll need refs next.
 - A full-screen `shot` costs around 500-1000 tokens to read. `shot --max-width 800` shrinks it, `shot <ref>` captures an element, and `shot --modal` captures the largest dialog. Smaller width shots are not necessarily cheaper to read, but the option exists if you find that it is.
 - Save images with `save <ref>`. `--url` prints the image url instead.
 - `greyman log --errors` lists console errors, uncaught exceptions, 4xx/5xx requests, and navigations. Newest items appear last. `--max N` to set output size, `--clear` to empty the log.
