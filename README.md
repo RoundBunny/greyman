@@ -52,5 +52,3 @@ greyman config set NAV_GAP 1000-2000  #
 greyman config get NAV_GAP            #
 greyman config unset NAV_GAP          # resets value to default
 ```
-
-Design notes and the anti-detection roadmap: [docs/DESIGN.md](docs/DESIGN.md).
