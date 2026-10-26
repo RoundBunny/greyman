@@ -1,7 +1,5 @@
 # greyman
 
-![greyman-logo](greyman-logo-link)
-
 Greyman is a token-efficient browsing tool for coding agents. Agents control a Chromium instance in a Docker container through a CLI. Blend in to the crowd and jump over agent web limitations with built-in anti-bot detection and the features of a full web browser. 
 
 Greyman is designed for small to medium-sized tasks that should primarily run in the background, as it uses approximate human-like rate limits by default. Settings live in `~/.greyman/options.cfg`. Manage them with `greyman config` (see Configuration); `greyman install` also records `INSTALLED_AGENTS` and `INSTALLED_VERSION` there. `greyman set` changes some of them on the running browser.
@@ -16,7 +14,7 @@ Windows version coming in a later release!
 
 ## Token Efficiency Comparisons
 
-Task: Go to the wikipedia page for "<page>" using only <tool>. How many languages is the page available in?
+Task: Go to the wikipedia page for "Web Browser" using only `<tool>`. How many languages is the page available in?
 | Tool | ccusage measured tokens | ccusage API Cost | Claude CLI token count | 
 |---|---|---|---|
 | Claude Web Fetch (fresh startup) | 127,690 | $0.07 | 450 | 
@@ -26,7 +24,7 @@ Task: Go to the wikipedia page for "<page>" using only <tool>. How many language
 | greyman snap (fresh startup) | 220,315 | $0.09 | 450 |
 | greyman snap (subsequent run) | 136,109 | $0.02 | 190 |
 
-Task: Using only <tool>, find out how much a dozen eggs cost from any Walmart in Austin. Only source information from Walmart, and don't use any external sites.
+Task: Using only `<tool>`, find out how much a dozen eggs cost from any Walmart in Austin. Only source information from Walmart, and don't use any external sites.
 | Tool | ccusage measured tokens | ccusage API Cost | Claude CLI token count | Usage% | Successful? | 
 |---|---|---|---|---|---|
 | Web Fetch/Search | 277,290 | $0.13 | 1.7k | <0.5% | No, blocked by site |
@@ -46,7 +44,7 @@ make image build        # build greyman:latest and bin/greyman
 
 ## Configuration
 
-Config file is `~/.greyman/options.cfg`. Manage settings for later launches with `greyman config`. Use `greyman set` to change the values for the live session, appending the flag `--setconfig` to keep them. `greyman up` flags and `GREYMAN_<KEY>` envrionment variables override config values.
+Config file is `~/.greyman/options.cfg`. Manage settings for later launches with `greyman config`. Use `greyman set` to change the values for the live session, appending the flag `--setconfig` to keep them. `greyman up` flags and `GREYMAN_<KEY>` environment variables override config values.
 
 ```sh
 greyman config                        # prints all config values
