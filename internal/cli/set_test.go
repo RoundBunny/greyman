@@ -153,7 +153,7 @@ func TestSetDoesNotSaveWhenTheDaemonRefuses(t *testing.T) {
 }
 
 func TestSetNeedsARunningBrowser(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	markInstalled(t)
 	before := cfgFile(t)
 	code, _, errs := run("set", "geolocation", "10", "20", "--setconfig")

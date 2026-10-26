@@ -12,13 +12,13 @@ import (
 	"greyman/internal/version"
 )
 
-// installEnv isolates install from the real machine: a temp home, no agents on PATH,
-// and a temp config dir.
+// installEnv isolates install from the real machine: a temp agent home, no agents on
+// PATH, and a temp HOME for ~/.greyman.
 func installEnv(t *testing.T) (home string) {
 	t.Helper()
 	home = t.TempDir()
 	apps := t.TempDir()
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("CODEX_HOME", "")
 	t.Setenv("COPILOT_HOME", "")
@@ -281,7 +281,7 @@ func TestFailedAgentIsNotRecorded(t *testing.T) {
 }
 
 func TestGate(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	for _, args := range [][]string{{"snap"}, {"up"}, {"status"}, {"click", "e1"}, {"shot"}} {
 		code, _, errs := run(args...)
 		if code != 1 || !strings.Contains(errs, "greyman is not set up for any agent; run `greyman install`") {

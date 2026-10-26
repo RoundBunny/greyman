@@ -128,7 +128,7 @@ func TestConfigGetFailsOnAnInvalidValue(t *testing.T) {
 }
 
 func TestConfigWorksBeforeInstall(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir()) // no INSTALLED_AGENTS
+	t.Setenv("HOME", t.TempDir()) // no INSTALLED_AGENTS
 	if code, out, errs := run("config", "set", "MAX_CHARS", "500"); code != 0 {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errs)
 	}

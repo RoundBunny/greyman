@@ -51,7 +51,7 @@ func fakeDocker(t *testing.T) (dir string, calls func() []string) {
 
 func setup(t *testing.T) {
 	t.Helper()
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	for _, s := range settings.All { // a developer's own exports must not leak into tests
 		t.Setenv("GREYMAN_"+s.Key, "")
 	}

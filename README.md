@@ -4,7 +4,7 @@
 
 Greyman is a token-efficient browsing tool for coding agents. Agents control a Chromium instance in a Docker container through a CLI. Blend in to the crowd and jump over agent web limitations with built-in anti-bot detection and the features of a full web browser. 
 
-Greyman is designed for small to medium-sized tasks that should primarily run in the background, as it uses approximate human-like rate limits by default. Settings live in `options.cfg` in the greyman config directory (`~/Library/Application Support/greyman` on macOS, `~/.config/greyman` on Linux, or `$GREYMAN_CONFIG_DIR`). Manage them with `greyman config` (see Configuration); `greyman install` also records `INSTALLED_AGENTS` and `INSTALLED_VERSION` there. `greyman set` changes some of them on the running browser.
+Greyman is designed for small to medium-sized tasks that should primarily run in the background, as it uses approximate human-like rate limits by default. Settings live in `~/.greyman/options.cfg`. Manage them with `greyman config` (see Configuration); `greyman install` also records `INSTALLED_AGENTS` and `INSTALLED_VERSION` there. `greyman set` changes some of them on the running browser.
 
 ## Quick Install
 Requires Docker.
@@ -46,7 +46,7 @@ make image build        # build greyman:latest and bin/greyman
 
 ## Configuration
 
-Config file is `options.cfg` in one of `~/Library/Application Support/greyman`, `~/.config/greyman`, or `$GREYMAN_CONFIG_DIR`. Manage settings for later launches with `greyman config`. Use `greyman set` to change the values for the live session, appending the flag `--setconfig` to keep them. `greyman up` flags and `GREYMAN_<KEY>` envrionment variables override config values.
+Config file is `~/.greyman/options.cfg`. Manage settings for later launches with `greyman config`. Use `greyman set` to change the values for the live session, appending the flag `--setconfig` to keep them. `greyman up` flags and `GREYMAN_<KEY>` envrionment variables override config values.
 
 ```sh
 greyman config                        # prints all config values

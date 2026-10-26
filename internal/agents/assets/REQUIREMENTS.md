@@ -5,7 +5,7 @@
 1. Execute the `greyman` binary on the host (not inside a sandbox that hides Docker or loopback).
 2. `up` and `down` run the `docker` CLI and need access to the Docker daemon socket. The environment passes through to `docker` (`HOME`, `DOCKER_HOST`, `DOCKER_CONFIG`).
 3. Every other command makes HTTP calls to `127.0.0.1` on a port Docker picks at each `up`.
-4. Read and write `state.json` and `options.cfg` in the greyman config directory: `~/Library/Application Support/greyman` on macOS, `~/.config/greyman` on Linux, or `$GREYMAN_CONFIG_DIR` if set.
+4. Read and write `state.json` and `options.cfg` in `~/.greyman`.
 5. `shot` writes a PNG to the temp directory, or to the path given with `-o`.
 6. greyman reads `GREYMAN_*`, `TZ`, `LC_ALL` and `LANG` from the environment.
 7. Internet traffic comes from the container, not the agent's process, so the agent's own network access can stay restricted.

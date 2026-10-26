@@ -38,7 +38,7 @@ func fakeDaemon(t *testing.T, reply map[string]any) *[]recorded {
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	port, _ := strconv.Atoi(u.Port())
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	markInstalled(t)
 	if err := state.Save(&state.State{Container: "greyman", Port: port, Token: "t"}); err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func fakeDaemon(t *testing.T, reply map[string]any) *[]recorded {
 	return &got
 }
 
-// markInstalled satisfies the setup gate in the current GREYMAN_CONFIG_DIR.
+// markInstalled satisfies the setup gate in the current HOME's ~/.greyman.
 func markInstalled(t *testing.T) {
 	t.Helper()
 	if err := config.Set(keyAgents, "other"); err != nil {
@@ -120,7 +120,7 @@ func TestShotWritesPNG(t *testing.T) {
 }
 
 func TestExitCodes(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	markInstalled(t)
 	if code, _, errs := run("click"); code != 2 || !strings.Contains(errs, "usage: greyman click") {
 		t.Errorf("missing arg: code=%d err=%q", code, errs)

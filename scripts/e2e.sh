@@ -4,12 +4,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$PWD/bin:$PATH"
-# Own config dir, so the run starts without an install and leaves the real one alone.
-export GREYMAN_CONFIG_DIR="$(mktemp -d)"
+# Own HOME, so the run starts without an install and leaves the real ~/.greyman alone.
+# DOCKER_CONFIG keeps docker on the real ~/.docker (contexts, credentials).
+export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
+test_home="$(mktemp -d)"
+export HOME="$test_home"
 skill_dir="$(mktemp -d)"
 # Stop the container before its state file goes, or a failed run leaves it running
 # with no way for the next `greyman up` to talk to it.
-trap 'greyman down >/dev/null 2>&1 || true; rm -rf "$GREYMAN_CONFIG_DIR" "$skill_dir"' EXIT
+trap 'greyman down >/dev/null 2>&1 || true; rm -rf "$test_home" "$skill_dir"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 expect() { # expect <description> <haystack> <needle>
@@ -22,7 +25,7 @@ greyman down --purge >/dev/null
 expect "gate before install" "$(greyman up 2>&1 || true)" "run \`greyman install\`"
 expect "install other" "$(greyman install other "$skill_dir")" "ok installed=other"
 [[ -f "$skill_dir/SKILL.md" && -f "$skill_dir/REQUIREMENTS.md" ]] || fail "install other: files missing in $skill_dir"
-expect "install config" "$(cat "$GREYMAN_CONFIG_DIR/options.cfg")" "INSTALLED_AGENTS=other"
+expect "install config" "$(cat "$HOME/.greyman/options.cfg")" "INSTALLED_AGENTS=other"
 expect "up --headless" "$(greyman up --headless)" "headless=true"
 
 expect "open" "$(greyman open example.com)" 'title="Example Domain"'

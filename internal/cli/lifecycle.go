@@ -80,7 +80,7 @@ func cmdUp(ctx context.Context, e *Env, args []string) error {
 		return fmt.Errorf("image %s not found; build it with `make image`", image)
 	}
 	// Without state the token is lost, so this container is unusable, but it may be a
-	// live session (another GREYMAN_CONFIG_DIR, a deleted state file). Let the user decide.
+	// live session (another HOME, a deleted state file). Let the user decide.
 	if docker.Running(ctx, docker.Name) {
 		return errors.New("a greyman container is running but its state file is missing; run `greyman down` first")
 	}

@@ -261,7 +261,7 @@ func daemonReplying(t *testing.T, header *string, status int, body string) {
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	port, _ := strconv.Atoi(u.Port())
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	markInstalled(t)
 	if err := state.Save(&state.State{Container: "greyman", Port: port, Token: "t"}); err != nil {
 		t.Fatal(err)

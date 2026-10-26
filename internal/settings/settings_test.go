@@ -9,7 +9,7 @@ import (
 
 func isolate(t *testing.T) {
 	t.Helper()
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	// Detection reads these; pin them so results do not depend on the host.
 	t.Setenv("TZ", "")
 	t.Setenv("LC_ALL", "")

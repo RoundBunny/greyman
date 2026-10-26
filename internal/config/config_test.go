@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,16 +19,29 @@ func readFile(t *testing.T) string {
 	return string(b)
 }
 
+// seed points HOME at a temp dir and writes data as an existing options.cfg.
+func seed(t *testing.T, data string, perm os.FileMode) string {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	p, _ := path()
+	if err := os.Mkdir(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(data), perm); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestMissingFileIsEmpty(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	if v, err := Get("A"); v != "" || err != nil {
 		t.Fatalf("Get = %q, %v", v, err)
 	}
 }
 
 func TestSetCreatesFileWithHeader(t *testing.T) {
-	dir := t.TempDir() + "/nested/greyman"
-	t.Setenv("GREYMAN_CONFIG_DIR", dir)
+	t.Setenv("HOME", t.TempDir()+"/nested")
 	if err := Set("A", "1"); err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +54,7 @@ func TestSetCreatesFileWithHeader(t *testing.T) {
 }
 
 func TestSetReplacesInPlaceAndKeepsComments(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	if err := os.WriteFile(p, []byte("# mine\nA=1\n\nB = 2\n# tail\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seed(t, "# mine\nA=1\n\nB = 2\n# tail\n", 0o644)
 	for _, kv := range [][2]string{{"B", "3"}, {"C", "4"}} {
 		if err := Set(kv[0], kv[1]); err != nil {
 			t.Fatal(err)
@@ -56,12 +66,7 @@ func TestSetReplacesInPlaceAndKeepsComments(t *testing.T) {
 }
 
 func TestLoadParsing(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	body := "# c\n\nA=1\n  B = x=y \nnoequals\nA=2\n#C=3\n"
-	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seed(t, "# c\n\nA=1\n  B = x=y \nnoequals\nA=2\n#C=3\n", 0o644)
 	m, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +77,7 @@ func TestLoadParsing(t *testing.T) {
 }
 
 func TestSetRejectsBadEntries(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	for _, kv := range [][2]string{{"", "v"}, {"a=b", "v"}, {"a\nb", "v"}, {"a", "v\nw"}} {
 		if err := Set(kv[0], kv[1]); err == nil {
 			t.Errorf("Set(%q, %q) succeeded", kv[0], kv[1])
@@ -81,11 +86,7 @@ func TestSetRejectsBadEntries(t *testing.T) {
 }
 
 func TestEmptyFileGetsHeader(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	if err := os.WriteFile(p, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seed(t, "", 0o644)
 	if err := Set("A", "1"); err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestEmptyFileGetsHeader(t *testing.T) {
 }
 
 func TestUpdateSeesOldValueAndKeepsOrder(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	var seen []string
 	for _, add := range []string{"a", "b"} {
 		if err := Update("LIST", func(old string) string {
@@ -120,7 +121,7 @@ func TestUpdateSeesOldValueAndKeepsOrder(t *testing.T) {
 }
 
 func TestConcurrentUpdatesDoNotLoseWrites(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	const n = 25
 	var wg sync.WaitGroup
 	for i := range n {
@@ -146,11 +147,7 @@ func TestConcurrentUpdatesDoNotLoseWrites(t *testing.T) {
 }
 
 func TestDeleteRemovesEveryLineForTheKey(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	if err := os.WriteFile(p, []byte("# mine\nA=1\nB=2\nA = 3\n# tail\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	seed(t, "# mine\nA=1\nB=2\nA = 3\n# tail\n", 0o600)
 	if err := Delete("A"); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +160,7 @@ func TestDeleteRemovesEveryLineForTheKey(t *testing.T) {
 }
 
 func TestDeleteOfAnUnsetKeyLeavesTheFileAlone(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	if err := Delete("A"); err != nil {
 		t.Fatal(err)
 	}
@@ -186,11 +183,7 @@ func TestDeleteOfAnUnsetKeyLeavesTheFileAlone(t *testing.T) {
 }
 
 func TestDeletingTheLastLineLeavesAFileThatGetsItsHeaderBack(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	if err := os.WriteFile(p, []byte("A=1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	seed(t, "A=1\n", 0o600)
 	if err := Delete("A"); err != nil {
 		t.Fatal(err)
 	}
@@ -203,11 +196,7 @@ func TestDeletingTheLastLineLeavesAFileThatGetsItsHeaderBack(t *testing.T) {
 }
 
 func TestFileIsPrivateAndAnOldWorldReadableFileIsTightened(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
-	p, _ := path()
-	if err := os.WriteFile(p, []byte("A=1\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	p := seed(t, "A=1\n", 0o644)
 	for _, write := range []func() error{
 		func() error { return Set("B", "2") },
 		func() error { return Delete("B") },

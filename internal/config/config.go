@@ -19,17 +19,13 @@ const (
 	header   = "# greyman options: KEY=VALUE, one per line"
 )
 
-// Dir returns the directory holding options.cfg and state.json. GREYMAN_CONFIG_DIR
-// overrides the default (used by tests).
+// Dir returns ~/.greyman, which holds options.cfg, state.json and the installed binary.
 func Dir() (string, error) {
-	if dir := os.Getenv("GREYMAN_CONFIG_DIR"); dir != "" {
-		return dir, nil
-	}
-	base, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "greyman"), nil
+	return filepath.Join(home, ".greyman"), nil
 }
 
 func path() (string, error) {

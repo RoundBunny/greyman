@@ -7,7 +7,7 @@ import (
 )
 
 func TestRoundTrip(t *testing.T) {
-	t.Setenv("GREYMAN_CONFIG_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 
 	if _, err := Load(); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Load on empty dir = %v, want ErrNotRunning", err)
