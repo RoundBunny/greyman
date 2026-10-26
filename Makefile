@@ -6,7 +6,6 @@ PLATFORM ?=
 # outside a git checkout it is dev.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PLATFORMS = darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
-INSTALL_SH ?= docs/placeholder_install.sh
 
 .PHONY: build test image deps dist
 
@@ -37,5 +36,5 @@ dist:
 			-ldflags "-X greyman/internal/version.Version=$(VERSION)" \
 			-o dist/greyman-$${p%/*}-$${p#*/} ./cmd/greyman || exit 1; \
 	done
-	sed 's/__VERSION__/$(VERSION)/' $(INSTALL_SH) > dist/install.sh
+	sed 's/__VERSION__/$(VERSION)/' install.sh > dist/install.sh
 	cd dist && shasum -a 256 greyman-* > checksums.txt

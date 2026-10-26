@@ -1,0 +1,32 @@
+# On a v* tag: test, build the release assets, and publish them as a GitHub release.
+# -rc tags become pre-releases, so releases/latest never points at one.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: make deps
+      - run: make test
+      - run: make dist VERSION="$GITHUB_REF_NAME"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-rc.*) pre=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes $pre
