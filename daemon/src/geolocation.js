@@ -1,4 +1,5 @@
 import { UserError } from './errors.js';
+import { serial } from './serial.js';
 
 // Keep the env names and defaults equal to the registry in internal/settings.
 const FIELDS = {
@@ -74,9 +75,8 @@ export async function initGeolocation(context, enabled) {
 const queues = new WeakMap();
 
 function inTurn(context, fn) {
-  const run = (queues.get(context) ?? Promise.resolve()).then(fn);
-  queues.set(context, run.catch(() => {}));
-  return run;
+  if (!queues.has(context)) queues.set(context, serial());
+  return queues.get(context)(fn);
 }
 
 // `greyman set geolocation`: args is { off: true } or { latitude, longitude, accuracy? }.

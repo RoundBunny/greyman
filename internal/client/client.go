@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// maxResponse caps a response body. The daemon keeps files it sends (base64) under it.
+const maxResponse = 64 << 20
+
 // idleTimeout is how long the daemon may stay silent before Do gives up. The daemon
 // writes a keepalive every 10s while a command runs.
 const idleTimeout = time.Minute
@@ -23,6 +26,7 @@ type Client struct {
 	token string
 	http  *http.Client
 	idle  time.Duration
+	max   int64 // maxResponse; tests lower it
 }
 
 // ErrUnreachable marks transport failures: nothing listening, connection dropped, or
@@ -46,6 +50,9 @@ type Response struct {
 type APIError struct {
 	Status int
 	Msg    string
+	// Version is the build that answered, as on Response: a stale container shows up
+	// as an error (an unknown route), so the caller still needs it.
+	Version string
 }
 
 func (e *APIError) Error() string { return e.Msg }
@@ -58,6 +65,7 @@ func New(port int, token string) *Client {
 		// Do enforces idle silence instead.
 		http: &http.Client{},
 		idle: idleTimeout,
+		max:  maxResponse,
 	}
 }
 
@@ -119,20 +127,26 @@ func (c *Client) Do(ctx context.Context, name string, args map[string]any) (*Res
 	defer res.Body.Close()
 	watchdog.Reset(c.idle)
 
+	version := res.Header.Get("X-Greyman-Version")
 	var r Response
-	if err := json.NewDecoder(io.LimitReader(idleReader{res.Body, watchdog, c.idle}, 64<<20)).Decode(&r); err != nil {
+	limited := &io.LimitedReader{R: idleReader{res.Body, watchdog, c.idle}, N: c.max}
+	if err := json.NewDecoder(limited).Decode(&r); err != nil {
 		if silent.Load() || parent.Err() != nil {
 			return nil, unreachable(err)
 		}
-		return nil, &APIError{Status: res.StatusCode, Msg: fmt.Sprintf("bad response (HTTP %d)", res.StatusCode)}
+		msg := fmt.Sprintf("bad response (HTTP %d)", res.StatusCode)
+		if limited.N == 0 {
+			msg = fmt.Sprintf("response over the %d MiB limit", c.max>>20)
+		}
+		return nil, &APIError{Status: res.StatusCode, Msg: msg, Version: version}
 	}
 	if !r.OK || res.StatusCode != http.StatusOK {
 		msg := r.Error
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", res.StatusCode)
 		}
-		return nil, &APIError{Status: res.StatusCode, Msg: msg}
+		return nil, &APIError{Status: res.StatusCode, Msg: msg, Version: version}
 	}
-	r.Version = res.Header.Get("X-Greyman-Version")
+	r.Version = version
 	return &r, nil
 }

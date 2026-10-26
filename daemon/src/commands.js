@@ -58,15 +58,8 @@ function target(tab, args) {
   return resolveRef(tab, args.ref);
 }
 
-// Serialize work per tab.
-function exclusive(tab, fn) {
-  const run = tab.queue.then(fn);
-  tab.queue = run.catch(() => {});
-  return run;
-}
-
-// Serialized and tracked as an agent action (see Tabs.during).
-const action = (ctx, tab, fn) => exclusive(tab, () => ctx.tabs.during(fn));
+// Serialized per tab and tracked as an agent action (see Tabs.during).
+const action = (ctx, tab, fn) => tab.queue(() => ctx.tabs.during(fn));
 
 // Playwright reports DNS failures, refused connections and aborted downloads as plain
 // errors with a multi-line call log; surface them as the user-facing result they are.
@@ -120,7 +113,7 @@ export const commands = {
   async status({ tabs, cfg }) {
     const active = tabs.activeId ?? 'none';
     return {
-      text: `ok browser=${cfg.channel} headless=${cfg.headless} tabs=${tabs.ids.join(',') || 'none'} active=${active} version=${cfg.version}`,
+      text: `ok headless=${cfg.headless} tabs=${tabs.ids.join(',') || 'none'} active=${active} version=${cfg.version}`,
     };
   },
 
@@ -150,7 +143,7 @@ export const commands = {
     };
     const tab = await ctx.tabs.get(args.tab);
     await checkWait(tab.page, wait);
-    return exclusive(tab, async () => {
+    return tab.queue(async () => {
       const timedOut = wait && !(await waitFor(tab.page, wait, waitMs, ctx.signal));
       const { text, refs } = await snapshot(tab.page, args.max ?? ctx.cfg.maxChars, opts);
       tab.refs = refs;
@@ -163,7 +156,7 @@ export const commands = {
     if (args.ref && args.modal) throw new UserError('give a ref or --modal, not both');
     const tab = await ctx.tabs.get(args.tab);
     const max = args.max ?? ctx.cfg.maxChars;
-    return exclusive(tab, async () => {
+    return tab.queue(async () => {
       if (args.ref) {
         const html = await withTarget(args, async () => (await resolveRef(tab, args.ref)).evaluate((el) => el.outerHTML));
         return { text: readHtml([html], tab.page.url(), max) };
@@ -181,11 +174,12 @@ export const commands = {
     if (args.ref && args.full) throw new UserError('full cannot be combined with a ref');
     if (args.modal && (args.ref || args.full)) throw new UserError('modal cannot be combined with a ref or full');
     const tab = await ctx.tabs.get(args.tab);
-    return exclusive(tab, async () => {
+    return tab.queue(async () => {
       let png;
       if (args.modal) png = await (await largestDialog(tab.page)).screenshot({ type: 'png' });
       else if (args.ref) png = await withTarget(args, async () => (await resolveRef(tab, args.ref)).screenshot({ type: 'png' }));
       else png = await tab.page.screenshot({ type: 'png', fullPage: Boolean(args.full) });
+      if (png.length > MAX_FILE_BYTES) throw tooBig('screenshot', png.length, args.full ? 'shoot a ref instead of the full page' : '');
       return { text: 'ok', png: png.toString('base64') };
     });
   },
@@ -193,7 +187,7 @@ export const commands = {
   // Saves the image behind a ref at full resolution, or just reports where it lives.
   async save(ctx, args) {
     const tab = await ctx.tabs.get(args.tab);
-    return exclusive(tab, async () => {
+    return tab.queue(async () => {
       const found = await withTarget(args, async () => (await resolveRef(tab, args.ref)).evaluate(imageSources));
       const url = bestImageUrl(found, tab.page.url());
       if (!url) throw new UserError(`ref ${args.ref} has no image`);
@@ -215,7 +209,7 @@ export const commands = {
   async click(ctx, args) {
     return act(ctx, args, (tab) =>
       withTarget(args, async () =>
-        humanClick(tab.page, tab.pos, await target(tab, args), { signal: ctx.signal }),
+        humanClick(tab.page, tab.pos, await target(tab, args), { signal: ctx.signal, input: ctx.input }),
       ),
     );
   },
@@ -223,20 +217,17 @@ export const commands = {
   async type(ctx, args) {
     if (typeof args.text !== 'string') throw new UserError('text required');
     return act(ctx, args, async (tab) => {
-      const opts = { signal: ctx.signal };
+      const opts = { signal: ctx.signal, input: ctx.input, submit: args.submit };
       await withTarget(args, async () => humanType(tab.page, tab.pos, await resolveRef(tab, args.ref), args.text, opts));
-      if (args.submit) {
-        await sleep(200 + Math.random() * 300);
-        ctx.signal.throwIfAborted(); // an interrupted type must not submit the form
-        await tab.page.keyboard.press('Enter');
-      }
     });
   },
 
   async scroll(ctx, args) {
     if (!['up', 'down'].includes(args.direction)) throw new UserError('direction must be up or down');
     const units = Math.min(Math.max(Math.trunc(args.units ?? 1), 1), 20);
-    return act(ctx, args, (tab) => humanScroll(tab.page, tab.pos, args.direction, units, { signal: ctx.signal }));
+    return act(ctx, args, (tab) =>
+      humanScroll(tab.page, tab.pos, args.direction, units, { signal: ctx.signal, input: ctx.input }),
+    );
   },
 
   async back(ctx, args) {
@@ -254,13 +245,22 @@ export const commands = {
 
   async close(ctx, args) {
     const tab = await ctx.tabs.get(args.tab);
+    // Let an action running on the tab finish instead of failing mid-way, but not wait
+    // forever on one that hangs (an evaluate on a page whose main thread never yields):
+    // closing the page fails it.
+    let timer;
+    await Promise.race([tab.queue.idle(), new Promise((r) => (timer = setTimeout(r, ctx.cfg.defaultWaitMs)))]);
+    clearTimeout(timer);
     await tab.page.close();
     return { text: `ok closed=${tab.id} active=${ctx.tabs.activeId ?? 'none'}` };
   },
 };
 
-// The base64 body has to fit the client's 64 MiB response cap.
-const MAX_IMAGE_BYTES = 40 * 1024 * 1024;
+// A file sent back (screenshot, image) travels as base64, which has to fit the client's
+// 64 MiB response cap.
+const MAX_FILE_BYTES = 40 * 1024 * 1024;
+const tooBig = (what, n, hint = '') =>
+  new UserError(`${what} is ${Math.round(n / 2 ** 20)} MB, over the ${MAX_FILE_BYTES / 2 ** 20} MB limit${hint ? `; ${hint}` : ''}`);
 
 // The image's bytes, fetched the way the browser would: a real navigation in a throwaway
 // tab, so headers and TLS are Chromium's own. Paced like any other navigation.
@@ -283,18 +283,17 @@ async function fetchImage(ctx, tab, url) {
     if (!res.ok()) throw new UserError(`HTTP ${res.status()} for ${url}`);
     const type = (res.headers()['content-type'] ?? '').split(';')[0].trim();
     if (!type.startsWith('image/')) throw new UserError(`${url} returned ${type || 'no content type'}, not an image (hotlink protection?)`);
-    const tooBig = (n) => new UserError(`image is ${Math.round(n / 2 ** 20)} MB, over the ${MAX_IMAGE_BYTES / 2 ** 20} MB limit`);
     // Chromium drops very large bodies from the cache the daemon reads them through, so
     // refuse on the declared size before asking, and explain a failure after it.
     const declared = Number(res.headers()['content-length']);
-    if (declared > MAX_IMAGE_BYTES) throw tooBig(declared);
+    if (declared > MAX_FILE_BYTES) throw tooBig('image', declared);
     let body;
     try {
       body = await res.body();
     } catch (err) {
       throw new UserError(`could not read the image body (it may be too large): ${firstLine(err?.message)}`);
     }
-    if (body.length > MAX_IMAGE_BYTES) throw tooBig(body.length);
+    if (body.length > MAX_FILE_BYTES) throw tooBig('image', body.length);
     return { body, type };
   });
 }

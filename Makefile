@@ -1,7 +1,5 @@
-# BROWSER: chromium (arm64 + amd64) | chrome (amd64 only)
 # PLATFORM: e.g. linux/amd64 to cross-build
 IMAGE ?= greyman:latest
-BROWSER ?= chromium
 PLATFORM ?=
 # Stamped into the binary and baked into the image, which the CLI compares at runtime to
 # catch a container older than the binary. Committed sources give the commit (+ -dirty);
@@ -23,5 +21,5 @@ test:
 	cd daemon && npm test
 
 image:
-	docker build -f docker/Dockerfile --build-arg BROWSER=$(BROWSER) --build-arg VERSION=$(VERSION) \
+	docker build -f docker/Dockerfile --build-arg VERSION=$(VERSION) \
 		$(if $(PLATFORM),--platform $(PLATFORM)) -t $(IMAGE) .

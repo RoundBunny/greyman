@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,12 +70,13 @@ func TestDecodesPNG(t *testing.T) {
 
 func TestAPIError(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Greyman-Version", "v9")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "ref e9 not found; run snap"})
 	})
 	_, err := c.Do(context.Background(), "click", map[string]any{"ref": "e9"})
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) || apiErr.Status != 400 || apiErr.Msg != "ref e9 not found; run snap" {
+	if !errors.As(err, &apiErr) || apiErr.Status != 400 || apiErr.Msg != "ref e9 not found; run snap" || apiErr.Version != "v9" {
 		t.Fatalf("err = %#v", err)
 	}
 }
@@ -190,5 +192,17 @@ func TestDoLeavesVersionEmptyForAnOlderDaemon(t *testing.T) {
 	r, err := c.Do(context.Background(), "status", nil)
 	if err != nil || r.Version != "" {
 		t.Fatalf("response = %+v, err %v", r, err)
+	}
+}
+
+func TestResponseOverTheCapSaysSo(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"png":"` + strings.Repeat("A", 4<<20) + `"}`))
+	})
+	c.max = 2 << 20
+	_, err := c.Do(context.Background(), "shot", map[string]any{})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Msg != "response over the 2 MiB limit" {
+		t.Fatalf("err = %v", err)
 	}
 }

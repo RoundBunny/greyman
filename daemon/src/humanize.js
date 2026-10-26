@@ -1,7 +1,8 @@
 // Human-like input. The first half is pure (seedable RNG) so it can be unit tested;
-// the second half drives a Playwright page with those primitives.
+// the second half drives a page with those primitives through an input backend (input.js).
 
 import { UserError } from './errors.js';
+import { cdpInput } from './input.js';
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -67,68 +68,88 @@ export function bezierPath(from, to, rand = Math.random) {
   return pts;
 }
 
-// ---- Playwright-bound ----
+// ---- backend-bound ----
 
 // Every function below takes an optional `signal` (AbortSignal) in its options and checks
-// it between steps, so a client that hangs up stops the input at the next checkpoint.
+// it between steps, so a client that hangs up stops the input at the next checkpoint. They
+// also take `input`, the backend that delivers the events (default: CDP); a call runs as one
+// backend session, so `io` below is that session's pointer and keyboard.
 
 // `pos` is the per-tab last mouse position ({x, y}) and is updated in place.
-export async function moveTo(page, pos, target, { rand = Math.random, sleep = defaultSleep, signal } = {}) {
+async function moveTo(io, pos, target, { rand = Math.random, sleep = defaultSleep, signal } = {}) {
   for (const p of bezierPath(pos, target, rand)) {
     signal?.throwIfAborted();
-    await page.mouse.move(p.x, p.y);
+    await io.move(p.x, p.y);
     await sleep(4 + rand() * 8);
   }
   pos.x = target.x;
   pos.y = target.y;
 }
 
-export async function humanClick(page, pos, locator, opts = {}) {
+async function click(io, pos, locator, opts) {
   const { rand = Math.random, sleep = defaultSleep, signal } = opts;
   await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
   if (!box) throw new UserError('element is not visible; run snap');
-  await moveTo(page, pos, pointInBox(box, rand), opts);
+  await moveTo(io, pos, pointInBox(box, rand), opts);
   await sleep(30 + rand() * 90); // hover before pressing
   signal?.throwIfAborted(); // never leave the button held down
-  await page.mouse.down();
+  await io.down();
   await sleep(40 + rand() * 80);
-  await page.mouse.up();
+  await io.up();
 }
 
-export async function humanType(page, pos, locator, text, opts = {}) {
-  const { rand = Math.random, sleep = defaultSleep, signal } = opts;
-  await humanClick(page, pos, locator, opts);
-  // Replace existing content in text fields; non-inputs just receive keystrokes.
-  const existing = await locator.inputValue().catch(() => '');
-  if (existing) {
-    await page.keyboard.press('ControlOrMeta+A');
-    await page.keyboard.press('Delete');
-  }
-  const delays = typingDelays(text, rand);
-  let i = 0;
-  for (const ch of text) {
-    signal?.throwIfAborted();
-    await sleep(delays[i++]);
-    if (ch === '\n') await page.keyboard.press('Enter');
-    else await page.keyboard.type(ch);
-  }
+export function humanClick(page, pos, locator, opts = {}) {
+  const { input = cdpInput } = opts;
+  return input.session(page, pos, (io) => click(io, pos, locator, opts));
 }
 
-// One unit is roughly one wheel notch cluster (~600px).
-export async function humanScroll(page, pos, direction, units = 1, opts = {}) {
-  const { rand = Math.random, sleep = defaultSleep, signal } = opts;
-  const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  if (!pos.x && !pos.y) {
-    await moveTo(page, pos, { x: vp.w * (0.3 + rand() * 0.4), y: vp.h * (0.3 + rand() * 0.4) }, opts);
-  }
-  const sign = direction === 'up' ? -1 : 1;
-  for (let u = 0; u < units; u++) {
-    for (let n = 0; n < 6; n++) {
-      signal?.throwIfAborted();
-      await page.mouse.wheel(0, sign * (90 + rand() * 20));
-      await sleep(30 + rand() * 50);
+// `submit` presses Enter after the text, in the same session.
+export function humanType(page, pos, locator, text, opts = {}) {
+  const { rand = Math.random, sleep = defaultSleep, signal, input = cdpInput, submit = false } = opts;
+  return input.session(page, pos, async (io) => {
+    await click(io, pos, locator, opts);
+    // Replace existing content in text fields; non-inputs just receive keystrokes.
+    const existing = await locator.inputValue().catch(() => '');
+    if (existing) {
+      await io.press('ControlOrMeta+A');
+      await io.press('Delete');
     }
-    await sleep(150 + rand() * 250);
-  }
+    const delays = typingDelays(text, rand);
+    let i = 0;
+    for (const ch of text) {
+      signal?.throwIfAborted();
+      await sleep(delays[i++]);
+      if (ch === '\n') await io.press('Enter');
+      else await io.type(ch);
+    }
+    if (submit) {
+      await sleep(200 + rand() * 300);
+      signal?.throwIfAborted(); // an interrupted type must not submit the form
+      await io.press('Enter');
+    }
+  });
+}
+
+// Wheel notches in one unit: about 600px, as a hand turns the wheel.
+const NOTCHES_PER_UNIT = 5;
+
+export function humanScroll(page, pos, direction, units = 1, opts = {}) {
+  const { rand = Math.random, sleep = defaultSleep, signal, input = cdpInput } = opts;
+  return input.session(page, pos, async (io) => {
+    const vp = await io.viewport();
+    // The wheel acts where the pointer is: bring it over the page if it has not been there.
+    if (pos.x <= 0 || pos.y <= 0 || pos.x >= vp.w || pos.y >= vp.h) {
+      await moveTo(io, pos, { x: vp.w * (0.3 + rand() * 0.4), y: vp.h * (0.3 + rand() * 0.4) }, opts);
+    }
+    const sign = direction === 'up' ? -1 : 1;
+    for (let u = 0; u < units; u++) {
+      for (let n = 0; n < NOTCHES_PER_UNIT; n++) {
+        signal?.throwIfAborted();
+        await io.wheel(sign);
+        await sleep(30 + rand() * 50);
+      }
+      await sleep(150 + rand() * 250);
+    }
+  });
 }

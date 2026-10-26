@@ -33,6 +33,11 @@ description: Control a containerized Chromium browser from the command line with
 - `greyman set geolocation <lat> <lon>` changes location for the running browser. `greyman set geolocation off` automatically denies future location requests. Inferred IP locations will mismatch from geolocation unless a proxy is also used.
 - Issue plain `greyman ...` commands. Avoid `$(...)`, redirects and environment-variable prefixes.
 
+## Tips
+
+- Flags may come before or after arguments. Use `--` before text that starts with `-`: `greyman type e3 --submit -- "-5"`.
+
+
 ## Configuration
 
 | Key | Default | Meaning |
@@ -51,8 +56,8 @@ description: Control a containerized Chromium browser from the command line with
 | `GEOLOCATION_COORD_LAT` | `0` | reported latitude, -90 to 90 |
 | `GEOLOCATION_COORD_LON` | `0` | reported longitude, -180 to 180 |
 | `GEOLOCATION_ACCURACY` | `10` | reported accuracy radius in meters |
-| `HEADLESS` | `0` | `1` runs Chromium headless |
-| `WATCH` | `0` | `1` serves the live view; headed mode only |
+| `HEADLESS` | `0` | `1` runs Chromium headless instead of headed under Xvfb |
+| `WATCH` | `0` | `1` serves the live view; headed only |
 | `SCREEN_W` | `1920` | browser window width in pixels |
 | `SCREEN_H` | `1080` | browser window height in pixels |
 | `API_PORT` | `0` | host port for the daemon API on 127.0.0.1; `0` lets Docker pick |

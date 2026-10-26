@@ -22,7 +22,8 @@ export const DEFAULT_MAX_TEXT = 200;
 const OPTIONS_SHOWN = 5;
 // Structurally identical siblings in a row before the repeats collapse.
 const REPEAT_MIN = 3;
-export const SNAP_HINT = 'raise --max, or narrow with --grep, --role, --within or --modal';
+// What a ref looks like: e12, or f5e5 inside a frame.
+const REF_RE = /^(f\d+)?e\d+$/;
 
 // role "name" [attr]* [ref=eN] (: inline text)?   — trailing ":" without text means children follow
 const LINE_RE = /^(\/?[\w-]+)(?: ("(?:[^"\\]|\\.)*"))?((?: \[[^\]]*\])*)(:)?(?: (.*))?$/;
@@ -267,9 +268,14 @@ export function compactSnapshot(text, opts = {}) {
   let list = modal ? dialogs : [...dialogs, ...rest];
 
   if (within) {
-    const byRef = find(list, (n) => n.ref === within);
-    const re = regex(within, '--within');
-    list = byRef.length ? byRef : guarded(() => find(list, (n) => re.test(n.line)));
+    // A ref that is gone is an error; as a pattern, "e12" would also match e120-e129.
+    if (REF_RE.test(within)) {
+      list = find(list, (n) => n.ref === within);
+      if (!list.length) throw new UserError(`--within ${within}: no such ref in this snapshot${modal ? ' (or it is outside the dialogs)' : ''}; run snap`);
+    } else {
+      const re = regex(within, '--within');
+      list = guarded(() => find(list, (n) => re.test(n.line)));
+    }
   }
   if (role || grep) {
     const roles = role ? new Set(role.split(',').map((r) => r.trim())) : null;
@@ -293,5 +299,5 @@ export async function snapshot(page, maxChars, opts = {}) {
   const tree = await page.ariaSnapshot({ mode: 'ai' });
   const title = await page.title();
   const { text, refs } = compactSnapshot(tree, opts);
-  return { text: truncate(`# ${title} <${page.url()}>\n${text}`, maxChars, SNAP_HINT), refs };
+  return { text: truncate(`# ${title} <${page.url()}>\n${text}`, maxChars), refs };
 }

@@ -106,6 +106,36 @@ test('a popup that opens while a scratch page is being created keeps its own tab
   assert.equal(tabs.takeFresh().length, 1);
 });
 
+test('a popup that closes itself hands control back to the tab it came from', async () => {
+  const { ctx, tabs } = setup();
+  await ctx.newPage(); // t2: a background ad tab
+  tabs.takeFresh();
+  const popup = await tabs.during(() => ctx.newPage()); // t3, opened by an action on t1
+  assert.equal(tabs.activeId, 't3');
+  popup.emit('close');
+  assert.equal(tabs.activeId, 't1');
+});
+
+test('a tab that opened and closed again before the next action is not reported', async () => {
+  const { ctx, tabs } = setup();
+  const popup = await tabs.during(() => ctx.newPage());
+  popup.emit('close');
+  assert.deepEqual(tabs.takeFresh(), []);
+  assert.equal(tabs.activeId, 't1');
+});
+
+test('closing a scratch page leaves alone a tab that reused its id', async () => {
+  const { ctx, tabs } = setup();
+  await tabs.during(async () => {
+    await tabs.scratch(async (page) => {
+      await ctx.newPage(); // a popup opens mid-download and takes the scratch page's id
+      page.close = async () => page.emit('close');
+    });
+  });
+  assert.deepEqual(tabs.ids, ['t1', 't2']);
+  assert.equal(tabs.activeId, 't2');
+});
+
 test('a scratch page is closed when its work fails', async () => {
   const { tabs } = setup();
   let closed = false;

@@ -16,14 +16,14 @@ expect() { # expect <description> <haystack> <needle>
   [[ "$2" == *"$3"* ]] || fail "$1: wanted '$3' in: $2"
   echo "ok   $1"
 }
-ref_of() { greyman snap | grep -E "$1" | grep -oE '\[[a-z0-9]+\]' | head -1 | tr -d '[]'; }
+ref_of() { greyman snap | grep -E "$1" | grep -oE '\[[a-z0-9]+\]' | head -1 | tr -d '[]' || fail "no ref matching $1"; }
 
 greyman down --purge >/dev/null
 expect "gate before install" "$(greyman up 2>&1 || true)" "run \`greyman install\`"
 expect "install other" "$(greyman install other "$skill_dir")" "ok installed=other"
 [[ -f "$skill_dir/SKILL.md" && -f "$skill_dir/REQUIREMENTS.md" ]] || fail "install other: files missing in $skill_dir"
 expect "install config" "$(cat "$GREYMAN_CONFIG_DIR/options.cfg")" "INSTALLED_AGENTS=other"
-expect "up" "$(greyman up)" "browser=chromium"
+expect "up --headless" "$(greyman up --headless)" "headless=true"
 
 expect "open" "$(greyman open example.com)" 'title="Example Domain"'
 ref=$(ref_of 'link "Learn more"')
@@ -81,9 +81,27 @@ greyman open example.com >/dev/null
 (( SECONDS - start < 3 )) || fail "NAV_GAP=0-0: second open took $((SECONDS - start))s, the default gap is 3s or more"
 echo "ok   NAV_GAP"
 snap=$(greyman snap)
-(( ${#snap} < 100 )) || fail "MAX_CHARS=60: snap is ${#snap} characters"
-expect "MAX_CHARS" "$snap" "[truncated"
+(( ${#snap} <= 60 )) || fail "MAX_CHARS=60: snap is ${#snap} characters"
+echo "ok   MAX_CHARS"
 expect "SNAP_MAX_TEXT" "$(greyman snap --max 5000)" "..."
+
+# Headed with the live view: input is real X input (xdotool on the virtual display).
+greyman down >/dev/null
+for key in API_PORT MAX_CHARS SNAP_MAX_TEXT; do greyman config unset "$key" >/dev/null; done
+expect "up --watch" "$(greyman up --watch)" "watch=http://127.0.0.1:"
+expect "--watch is headed" "$(greyman status)" "headless=false"
+greyman open https://httpbin.org/forms/post >/dev/null
+ref=$(ref_of 'textbox "Customer name')
+greyman type "$ref" "Ada Lovelace" >/dev/null
+expect "type, headed" "$(greyman snap)" "Ada Lovelace"
+greyman type "$ref" "Grace Hopper" >/dev/null
+snap=$(greyman snap)
+expect "retype replaces, headed" "$snap" "Grace Hopper"
+[[ "$snap" != *"Ada Lovelace"* ]] || fail "retype did not replace the old text"
+expect "scroll, headed" "$(greyman scroll down 2)" "ok"
+greyman scroll up 2 >/dev/null
+expect "click submits, headed" "$(greyman click "$(ref_of 'button "Submit order')")" "httpbin.org/post"
+expect "headless refuses --watch" "$(greyman down >/dev/null; GREYMAN_HEADLESS=1 greyman up --watch 2>&1 || true)" "watch needs headed mode"
 
 greyman down >/dev/null
 echo "all passed"

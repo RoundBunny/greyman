@@ -170,10 +170,10 @@ func cmdStatus(ctx context.Context, e *Env, args []string) error {
 
 func printStatus(ctx context.Context, e *Env, st *state.State) error {
 	resp, err := client.New(st.Port, st.Token).Do(ctx, "status", nil)
+	checkReply(resp, err)
 	if err != nil {
 		return explain(ctx, err)
 	}
-	checkVersion(resp.Version)
 	fmt.Fprintln(e.Out, resp.Text+watchSuffix(st))
 	return nil
 }

@@ -146,6 +146,10 @@ test('within takes a ref or a pattern', () => {
 test('a bad pattern is a user error', () => {
   assert.throws(() => compact(DIALOGS, { grep: '(' }), UserError);
   assert.throws(() => compact(DIALOGS, { within: '(' }), UserError);
+  // a ref that is gone is an error, not a pattern (/e7/ would also match e70-e79); with
+  // --modal, so is one outside the dialogs (e3)
+  assert.throws(() => compact(DIALOGS, { within: 'e999' }), (err) => err instanceof UserError && /--within e999: no such ref in this snapshot; run snap/.test(err.message));
+  assert.throws(() => compact(DIALOGS, { within: 'e3', modal: true }), /outside the dialogs/);
 });
 
 test('a long run of ref-less options collapses, keeping the selected one', () => {

@@ -245,11 +245,18 @@ func TestLogFlags(t *testing.T) {
 // daemonAt starts a fake daemon that answers with the given X-Greyman-Version.
 func daemonAt(t *testing.T, header *string) {
 	t.Helper()
+	daemonReplying(t, header, http.StatusOK, `{"ok":true,"text":"x"}`)
+}
+
+// daemonReplying is daemonAt with a chosen status and body.
+func daemonReplying(t *testing.T, header *string, status int, body string) {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if header != nil {
 			w.Header().Set("X-Greyman-Version", *header)
 		}
-		_, _ = w.Write([]byte(`{"ok":true,"text":"x"}`))
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
@@ -281,6 +288,20 @@ func TestVersionMismatchWarnsOnceAndStillRuns(t *testing.T) {
 	w := buf.String()
 	if strings.Count(w, "warning:") != 1 || !strings.Contains(w, version.Version) || !strings.Contains(w, other) || !strings.Contains(w, "greyman down") {
 		t.Fatalf("warning = %q", w)
+	}
+}
+
+// A container older than the CLI does not know newer commands; that error is where the
+// warning matters most.
+func TestVersionMismatchWarnsOnAnError(t *testing.T) {
+	buf := captureVersionWarnings(t)
+	other := version.Version + "-other"
+	daemonReplying(t, &other, http.StatusNotFound, `{"ok":false,"error":"unknown route /v1/set"}`)
+	if code, _, _ := run("snap"); code != 1 {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(buf.String(), other) {
+		t.Fatalf("warning = %q", buf.String())
 	}
 }
 

@@ -2,24 +2,19 @@
 # Build context is the repo root:  docker build -f docker/Dockerfile -t greyman:latest .
 FROM node:24-slim
 
-# chromium: Playwright's Chromium (works on arm64 and amd64).
-# chrome:   Google Chrome stable (amd64 only; Google ships no Linux arm64 build).
-ARG BROWSER=chromium
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
-    GREYMAN_CHANNEL=${BROWSER}
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
 # Fonts: Liberation is metric-compatible with Arial/Times/Courier and fontconfig
 # aliases those names to it by default; Noto/DejaVu/emoji cover the rest.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xvfb tini ca-certificates fontconfig x11vnc novnc websockify \
+      xvfb xdotool tini ca-certificates fontconfig x11vnc novnc websockify \
       fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY daemon/package.json daemon/package-lock.json ./
 RUN npm ci --omit=dev \
-    && if [ "$BROWSER" = "chromium" ]; then FLAGS="--no-shell"; else FLAGS=""; fi \
-    && npx playwright install --with-deps $FLAGS "$BROWSER" \
+    && npx playwright install --with-deps --no-shell chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # The build the CLI compares itself with (make image passes VERSION). After the slow

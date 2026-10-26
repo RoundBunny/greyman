@@ -44,18 +44,18 @@ func commands() []command {
 	return []command{
 		{"up", "greyman up [--headless | --watch] [--proxy URL] [--platform amd64] [--image NAME]", "start the browser container (--watch: live view URL)", cmdUp},
 		{"down", "greyman down [--purge]", "stop the container (--purge also wipes cookies/profile)", cmdDown},
-		{"status", "greyman status", "show container/browser state", cmdStatus},
-		{"open", "greyman open <url> [--tab tN] [--snap] [--wait W]", "navigate the active tab", cmdOpen},
-		{"snap", "greyman snap [--modal] [--grep RE] [--role R] [--within REF|RE] [--max N] [--wait W] [--tab tN]", "compact accessibility tree with refs (primary view)", cmdSnap},
-		{"click", "greyman click <ref> | --name TEXT [--role R] [--exact] [--nth N] [--tab tN] [--snap] [--wait W]", "click an element by ref or by name", cmdClick},
-		{"type", "greyman type <ref> <text> [--submit] [--tab tN] [--snap] [--wait W]", "type into an element (replaces content)", cmdType},
-		{"scroll", "greyman scroll <up|down> [n] [--tab tN] [--snap] [--wait W]", "scroll n screens (default 1)", cmdScroll},
-		{"back", "greyman back [--tab tN] [--snap] [--wait W]", "go back in history", cmdBack},
+		{"status", "greyman status", "show container state, open tabs and version", cmdStatus},
+		{"open", "greyman open <url> [--tab tN] [--snap] " + waitUsage, "navigate a tab to a URL (https:// is added if missing)", cmdOpen},
+		{"snap", "greyman snap [--modal] [--grep RE] [--role R] [--within REF|RE] [--max N] " + waitUsage + " [--tab tN]", "compact accessibility tree with refs (primary view)", cmdSnap},
+		{"click", "greyman click <ref> | --name TEXT [--role R] [--exact] [--nth N] [--tab tN] [--snap] " + waitUsage, "click an element by ref or by name", cmdClick},
+		{"type", "greyman type <ref> <text> [--submit] [--tab tN] [--snap] " + waitUsage, "type into an element (replaces content; --submit presses Enter)", cmdType},
+		{"scroll", "greyman scroll <up|down> [n] [--tab tN] [--snap] " + waitUsage, "scroll n screens (default 1, at most 20)", cmdScroll},
+		{"back", "greyman back [--tab tN] [--snap] " + waitUsage, "go back in history", cmdBack},
 		{"read", "greyman read [ref] [--modal] [--tab tN] [--max N]", "page, dialog or element content as markdown (when snap is not enough)", cmdRead},
 		{"shot", "greyman shot [ref] [--modal] [--full] [--max-width N] [-o path] [--tab tN]", "screenshot to a PNG file; prints the path", cmdShot},
 		{"save", "greyman save <ref> [-o path] [--url] [--tab tN]", "download the image behind a ref at full size; prints the path", cmdSave},
-		{"log", "greyman log [--errors] [--max N] [--clear] [--tab tN]", "console errors and failed requests of a tab", cmdLog},
-		{"close", "greyman close [--tab tN]", "close a tab", cmdClose},
+		{"log", "greyman log [--errors] [--max N] [--clear] [--tab tN]", "console errors, exceptions, failed requests and navigations of a tab", cmdLog},
+		{"close", "greyman close [--tab tN]", "close a tab (closing the last one stops the browser)", cmdClose},
 		{"set", "greyman set <option> <args> [--setconfig]", "change a setting on the running browser, e.g. geolocation (--setconfig also saves it)", cmdSet},
 		{"config", "greyman config [list | get KEY | set KEY VALUE | unset KEY]", "show or change settings (applied on the next `up`)", cmdConfig},
 		{"install", "greyman install [claude|codex|cursor|copilot|all|other [dir]] [--force]", "install the greyman skill for a coding agent (no name: detect)", cmdInstall},
@@ -107,12 +107,22 @@ func Run(ctx context.Context, args []string, out, errw io.Writer) int {
 	return 2
 }
 
+// helpNotes explains what the usage lines share.
+const helpNotes = `
+W is idle (the default), text=TEXT, css=SELECTOR or none; --wait-timeout caps it
+(default: the DEFAULT_WAIT setting). A timeout is reported, not an error.
+Refs like e12 come from snap; after the page changes, run snap again.
+--tab tN picks a tab (default: the active one). Flags may come before or after
+arguments; use -- before text that starts with -.
+`
+
 func (e *Env) help() {
 	var b strings.Builder
 	b.WriteString("greyman: a browser for coding agents\n\n")
 	for _, c := range commands() {
 		fmt.Fprintf(&b, "  %-58s %s\n", c.usage, c.summary)
 	}
+	b.WriteString(helpNotes)
 	fmt.Fprint(e.Err, b.String())
 }
 
@@ -186,9 +196,7 @@ func call(ctx context.Context, name string, args map[string]any) (*client.Respon
 		return nil, err
 	}
 	resp, err := c.Do(ctx, name, args)
-	if err == nil {
-		checkVersion(resp.Version)
-	}
+	checkReply(resp, err)
 	return resp, explain(ctx, err)
 }
 
@@ -212,6 +220,18 @@ func checkVersion(daemon string) {
 		}
 		fmt.Fprintf(versionWarn, "warning: greyman is %s but the container runs %s; run `greyman down`, rebuild or pull the matching image, then `greyman up`\n", version.Version, running)
 	})
+}
+
+// checkReply runs checkVersion whenever the daemon answered, errors included: a
+// container older than the CLI answers a newer command with "unknown route".
+func checkReply(resp *client.Response, err error) {
+	var apiErr *client.APIError
+	switch {
+	case err == nil:
+		checkVersion(resp.Version)
+	case errors.As(err, &apiErr):
+		checkVersion(apiErr.Version)
+	}
 }
 
 // explain replaces "connection refused" with the likely cause when the container is

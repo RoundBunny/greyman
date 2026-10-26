@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bezierPath, mulberry32, pointInBox, typingDelays, humanClick, humanScroll, humanType } from '../src/humanize.js';
+import {
+  bezierPath,
+  humanClick,
+  humanScroll,
+  humanType,
+  mulberry32,
+  pointInBox,
+  typingDelays,
+} from '../src/humanize.js';
 
 test('seeded RNG is deterministic', () => {
   const a = mulberry32(42);
@@ -52,7 +60,7 @@ function fakeBrowser() {
   const page = {
     mouse: { move: async () => {}, down: async () => {}, up: async () => {}, wheel: async () => {} },
     keyboard: { type: async (ch) => typed.push(ch), press: async () => {} },
-    evaluate: async () => ({ w: 1000, h: 800 }),
+    evaluate: async () => ({ w: 1000, h: 800 }), // the CDP backend's viewport()
   };
   const locator = {
     scrollIntoViewIfNeeded: async () => {},
@@ -104,4 +112,78 @@ test('humanScroll stops between wheel notches when aborted', async () => {
     /hung up/,
   );
   assert.equal(wheels, 4);
+});
+
+// An input backend that records what the session was asked to do.
+function recordingInput() {
+  const log = [];
+  const io = {
+    viewport: () => ({ w: 1000, h: 800 }),
+    move: async () => log.push('move'),
+    down: async () => log.push('down'),
+    up: async () => log.push('up'),
+    wheel: async (n) => log.push(`wheel ${n}`),
+    type: async (ch) => log.push(`type ${ch}`),
+    press: async (key) => log.push(`press ${key}`),
+  };
+  const input = {
+    session: async (_page, _pos, fn) => {
+      log.push('session');
+      return fn(io);
+    },
+  };
+  return { log, input };
+}
+
+test('humanType is one input session: click, clear what is there, then keys', async () => {
+  const { page, locator } = fakeBrowser();
+  locator.inputValue = async () => 'old';
+  const { log, input } = recordingInput();
+  await humanType(page, { x: 0, y: 0 }, locator, 'a\nb', { sleep: async () => {}, input });
+  assert.equal(log.filter((l) => l === 'session').length, 1);
+  const from = log.indexOf('up') + 1;
+  assert.deepEqual(log.slice(from), ['press ControlOrMeta+A', 'press Delete', 'type a', 'press Enter', 'type b']);
+  assert.deepEqual(log.slice(0, 2), ['session', 'move']);
+  assert.ok(log.indexOf('down') < log.indexOf('up'));
+});
+
+test('humanClick runs as one session', async () => {
+  const { page, locator } = fakeBrowser();
+  const { log, input } = recordingInput();
+  await humanClick(page, { x: 0, y: 0 }, locator, { sleep: async () => {}, input });
+  assert.equal(log.filter((l) => l === 'session').length, 1);
+});
+
+test('humanType with submit presses Enter in the same session, unless aborted first', async () => {
+  const { page, locator } = fakeBrowser();
+  const { log, input } = recordingInput();
+  await humanType(page, { x: 0, y: 0 }, locator, 'a', { sleep: async () => {}, input, submit: true });
+  assert.equal(log.filter((l) => l === 'session').length, 1);
+  assert.deepEqual(log.slice(-2), ['type a', 'press Enter']);
+
+  const ac = new AbortController();
+  const aborted = recordingInput();
+  const sleep = async (ms) => {
+    if (ms >= 200) ac.abort(); // the pause before submitting; with rand 0.5 a key waits ~60ms
+  };
+  const opts = { sleep, rand: () => 0.5, input: aborted.input, submit: true, signal: ac.signal };
+  await assert.rejects(humanType(page, { x: 0, y: 0 }, locator, 'a', opts));
+  assert.equal(aborted.log.at(-1), 'type a');
+});
+
+test('humanScroll turns the wheel five notches a unit, in the given direction', async () => {
+  const { page } = fakeBrowser();
+  const { log, input } = recordingInput();
+  await humanScroll(page, { x: 500, y: 400 }, 'up', 2, { sleep: async () => {}, input });
+  assert.deepEqual(log, ['session', ...Array(10).fill('wheel -1')]);
+});
+
+test('humanScroll first brings a pointer that is not over the page onto it', async () => {
+  for (const pos of [{ x: 0, y: 0 }, { x: 500, y: -40 }, { x: 1500, y: 400 }]) {
+    const { page } = fakeBrowser(); // viewport 1000x800
+    const { log, input } = recordingInput();
+    await humanScroll(page, pos, 'down', 1, { sleep: async () => {}, input });
+    assert.ok(log.includes('move'), `no move from ${JSON.stringify(pos)}`);
+    assert.ok(pos.x > 0 && pos.x < 1000 && pos.y > 0 && pos.y < 800);
+  }
 });

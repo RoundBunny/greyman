@@ -21,6 +21,9 @@ func (a *actFlags) bind(fs *flag.FlagSet) {
 	bindWait(fs, &a.wait, &a.waitTimeout)
 }
 
+// waitUsage is the wait options in the usage line of snap, open and every action.
+const waitUsage = "[--wait W] [--wait-timeout MS]"
+
 // bindWait registers --wait and --wait-timeout, shared by snap and every action.
 func bindWait(fs *flag.FlagSet, wait *string, timeout *int) {
 	fs.StringVar(wait, "wait", "", "wait first/after: idle (default), text=TEXT, css=SELECTOR or none (a timeout is reported, not an error)")
@@ -55,7 +58,7 @@ func runAction(ctx context.Context, e *Env, name string, a actFlags, args map[st
 }
 
 func cmdClick(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman click <ref> | --name TEXT [--role R] [--exact] [--nth N] [--tab tN] [--snap] [--wait W]"
+	const usage = "greyman click <ref> | --name TEXT [--role R] [--exact] [--nth N] [--tab tN] [--snap] " + waitUsage
 	fs, a := newFlags("click", e, usage), actFlags{}
 	a.bind(fs)
 	name := fs.String("name", "", "click the element with this accessible name instead of a ref")
@@ -89,7 +92,7 @@ func cmdClick(ctx context.Context, e *Env, args []string) error {
 }
 
 func cmdType(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman type <ref> <text> [--submit] [--tab tN] [--snap]"
+	const usage = "greyman type <ref> <text> [--submit] [--tab tN] [--snap] " + waitUsage
 	fs, a := newFlags("type", e, usage), actFlags{}
 	a.bind(fs)
 	submit := fs.Bool("submit", false, "press Enter after typing")
@@ -104,7 +107,7 @@ func cmdType(ctx context.Context, e *Env, args []string) error {
 }
 
 func cmdScroll(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman scroll <up|down> [n] [--tab tN] [--snap]"
+	const usage = "greyman scroll <up|down> [n] [--tab tN] [--snap] " + waitUsage
 	fs, a := newFlags("scroll", e, usage), actFlags{}
 	a.bind(fs)
 	pos, err := parse(fs, args)

@@ -6,7 +6,7 @@ import (
 )
 
 func cmdOpen(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman open <url> [--tab tN] [--snap]"
+	const usage = "greyman open <url> [--tab tN] [--snap] " + waitUsage
 	fs, a := newFlags("open", e, usage), actFlags{}
 	a.bind(fs)
 	pos, err := parse(fs, args)
@@ -20,7 +20,7 @@ func cmdOpen(ctx context.Context, e *Env, args []string) error {
 }
 
 func cmdBack(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman back [--tab tN] [--snap]"
+	const usage = "greyman back [--tab tN] [--snap] " + waitUsage
 	fs, a := newFlags("back", e, usage), actFlags{}
 	a.bind(fs)
 	pos, err := parse(fs, args)

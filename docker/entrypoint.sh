@@ -6,7 +6,8 @@ set -eu
 # another machine and refuse to start. Only one container uses the volume at a time.
 rm -f "${GREYMAN_PROFILE:-/data/profile}"/Singleton*
 
-# Headed Chromium on a virtual display is the default; GREYMAN_HEADLESS=1 skips X entirely.
+# Headed Chromium on a virtual display is the default, where input is real X input (see
+# daemon/src/input.js); GREYMAN_HEADLESS=1 skips X entirely.
 if [ "${GREYMAN_HEADLESS:-0}" != "1" ]; then
   export DISPLAY=:99
   rm -f /tmp/.X99-lock
@@ -19,8 +20,11 @@ if [ "${GREYMAN_HEADLESS:-0}" != "1" ]; then
 
   # `greyman up --watch`: view-only live view of the virtual display, served by noVNC.
   # x11vnc only listens inside the container; the host publishes 6080 on loopback.
+  # -nocursorshape paints the pointer into the picture: noVNC would otherwise draw the
+  # viewer's own pointer, not the browser's.
   if [ "${GREYMAN_WATCH:-0}" = "1" ]; then
-    x11vnc -display :99 -viewonly -nopw -forever -shared -localhost -rfbport 5900 -quiet >/dev/null 2>&1 &
+    x11vnc -display :99 -viewonly -nopw -forever -shared -localhost -rfbport 5900 -quiet \
+      -nocursorshape -cursor most >/dev/null 2>&1 &
     websockify --web /usr/share/novnc 6080 localhost:5900 >/dev/null 2>&1 &
   fi
 fi

@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { UserError } from './errors.js';
 import { initGeolocation } from './geolocation.js';
 import { attachLog } from './log.js';
+import { serial } from './serial.js';
 import { IGNORE_DEFAULT_ARGS, applyToContext, launchArgs } from './stealth.js';
 
 // Tab registry over a persistent BrowserContext. Tabs get short stable ids (t1, t2...).
@@ -59,7 +60,7 @@ export class Tabs {
     // refs/snapUrl: what the last snap on this tab reported, so a ref can be checked
     // before it is used (cleared when a new document loads). log: console and network
     // errors (see log.js).
-    const tab = { id, page, pos: { x: 0, y: 0 }, queue: Promise.resolve(), refs: null, snapUrl: '', log: [] };
+    const tab = { id, page, pos: { x: 0, y: 0 }, queue: serial(), refs: null, snapUrl: '', log: [] };
     attachLog(page, tab.log);
     // A new document rebuilds the page's ref table, so refs from the last snapshot name
     // nothing reliable any more. (Same-document navigation keeps them.)
@@ -68,10 +69,17 @@ export class Tabs {
     });
     this.#byId.set(id, tab);
     if (opened) this.#fresh.push(id);
+    // The tab that was active when this one took over, to go back to when it closes.
+    const prevActive = this.#active;
     if ((opened && this.#acting > 0) || !this.#active) this.#active = id;
     page.on('close', () => {
+      // A scratch page's id is reused once it is forgotten; leave the new owner alone.
+      if (this.#byId.get(id)?.page !== page) return;
       this.#byId.delete(id);
-      if (this.#active === id) this.#active = [...this.#byId.keys()].pop() ?? null;
+      // A popup that closed itself (an OAuth window) is not news for the next action, and
+      // hands control back to the tab it came from, not a background one.
+      this.#fresh = this.#fresh.filter((f) => f !== id);
+      if (this.#active === id) this.#active = this.#byId.has(prevActive) ? prevActive : ([...this.#byId.keys()].pop() ?? null);
     });
   }
 
@@ -106,7 +114,7 @@ export class Tabs {
 
 export async function launchBrowser(cfg) {
   const context = await chromium.launchPersistentContext(cfg.profileDir, {
-    channel: cfg.channel,
+    channel: 'chromium', // the full binary in new headless mode; the image has no headless shell
     headless: cfg.headless,
     viewport: null, // use the real window size
     args: launchArgs({ locale: cfg.locale }),

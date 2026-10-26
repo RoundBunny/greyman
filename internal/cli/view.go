@@ -35,7 +35,7 @@ func printSnap(ctx context.Context, e *Env, tab string, max int) error {
 }
 
 func cmdSnap(ctx context.Context, e *Env, args []string) error {
-	const usage = "greyman snap [--modal] [--grep RE] [--role R] [--within REF|RE] [--max N] [--wait W] [--tab tN]"
+	const usage = "greyman snap [--modal] [--grep RE] [--role R] [--within REF|RE] [--max N] " + waitUsage + " [--tab tN]"
 	fs := newFlags("snap", e, usage)
 	tab := fs.String("tab", "", "tab id (default: active tab)")
 	max := fs.Int("max", 0, "max characters (default: daemon setting)")

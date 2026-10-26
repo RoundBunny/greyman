@@ -29,7 +29,9 @@ export async function resolveRef(tab, ref) {
     throw new UserError(`${why}; run snap`);
   }
   if (info.frame || !info.name || !CHECKABLE.has(info.role)) return loc;
-  const same = loc.and(tab.page.getByRole(info.role, { name: info.name }));
+  // Exact: by default the name is a case-insensitive substring, so "Follow" would still
+  // match a button that became "Unfollow".
+  const same = loc.and(tab.page.getByRole(info.role, { name: info.name, exact: true }));
   let found;
   try {
     found = await same.count();

@@ -18,7 +18,7 @@ function setup({ refs, count = 1, snapUrl = 'https://a.test/', url = snapUrl } =
       calls.push(['getByRef', r]);
       return loc;
     },
-    getByRole: (role, opts) => ({ desc: `${role}:${opts.name}` }),
+    getByRole: (role, opts) => ({ desc: `${role}:${opts.name}${opts.exact ? ':exact' : ''}` }),
   };
   return { tab: { page, refs, snapUrl }, calls, loc };
 }
@@ -27,7 +27,8 @@ const BUTTON = { role: 'button', name: 'Use my current location', frame: false }
 test('a ref that is still the same role and name resolves', async () => {
   const { tab, calls, loc } = setup({ refs: new Map([['e4', BUTTON]]) });
   assert.equal(await resolveRef(tab, 'e4'), loc);
-  assert.deepEqual(calls.at(-1), ['and', 'button:Use my current location']);
+  // whole name only: a substring match would accept "Follow" -> "Unfollow"
+  assert.deepEqual(calls.at(-1), ['and', 'button:Use my current location:exact']);
 });
 
 test('a reused element with a new name is an error, not a click on the wrong thing', async () => {

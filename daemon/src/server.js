@@ -4,6 +4,7 @@ import { launchBrowser } from './browser.js';
 import { commands } from './commands.js';
 import { UserError, firstLine } from './errors.js';
 import { parseGeolocation } from './geolocation.js';
+import { createInput } from './input.js';
 import { parseProxy } from './proxy.js';
 import { DEFAULT_GAPS, createLimiter, parseRange } from './ratelimit.js';
 import { DEFAULT_MAX_TEXT } from './snapshot.js';
@@ -31,7 +32,6 @@ export function loadConfig(e = env) {
     host: e.GREYMAN_HOST ?? '0.0.0.0', // inside the container; the host publishes it to loopback only
     port: Number(e.GREYMAN_PORT ?? 7777),
     headless: e.GREYMAN_HEADLESS === '1',
-    channel: e.GREYMAN_CHANNEL ?? 'chromium', // 'chromium' | 'chrome'
     profileDir: e.GREYMAN_PROFILE ?? '/data/profile',
     proxy: parseProxy(e.GREYMAN_PROXY),
     locale: e.GREYMAN_LOCALE || undefined,
@@ -130,9 +130,10 @@ async function main() {
   const cfg = loadConfig();
   const tabs = await launchBrowser(cfg);
   const limiter = createLimiter({ gaps: cfg.gaps });
-  const server = createServer({ cfg, tabs, limiter });
+  const input = createInput(cfg);
+  const server = createServer({ cfg, tabs, limiter, input });
   server.listen(cfg.port, cfg.host, () => {
-    console.log(`greyman daemon listening on ${cfg.host}:${cfg.port} (${cfg.channel}, headless=${cfg.headless})`);
+    console.log(`greyman daemon listening on ${cfg.host}:${cfg.port} (headless=${cfg.headless})`);
   });
 
   let closing = false;
@@ -140,6 +141,7 @@ async function main() {
     closing = true;
     console.log('shutting down');
     server.close();
+    input.close();
     // Closing the context shuts Chromium down cleanly, which flushes cookies to the profile dir.
     await tabs.context.close().catch((err) => console.error('context close failed:', err));
     console.log('context closed');

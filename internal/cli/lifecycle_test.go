@@ -262,6 +262,18 @@ func TestUpPrecedenceFlagThenEnvThenFile(t *testing.T) {
 	}
 }
 
+func TestUpDefaultsToHeaded(t *testing.T) {
+	setup(t)
+	for _, args := range [][]string{nil, {"--watch"}} {
+		if _, env := upAndGetRun(t, args...); !strings.Contains(env, "GREYMAN_HEADLESS=0") {
+			t.Errorf("up %v is not headed:\n%s", args, env)
+		}
+	}
+	if _, env := upAndGetRun(t, "--headless"); !strings.Contains(env, "GREYMAN_HEADLESS=1") {
+		t.Errorf("up --headless is not headless:\n%s", env)
+	}
+}
+
 func TestUpRejectsBadSettingsBeforeTouchingDocker(t *testing.T) {
 	cases := []struct {
 		name string
