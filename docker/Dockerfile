@@ -30,6 +30,9 @@ RUN mkdir -p /data/profile /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \
     && chown -R node:node /data
 
+# Lets the install script prune greyman's untagged images without touching anyone else's.
+LABEL org.opencontainers.image.title=greyman
+
 USER node
 EXPOSE 7777 6080
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]

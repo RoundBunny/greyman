@@ -79,3 +79,24 @@ func TestParsePort(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestImageFor(t *testing.T) {
+	for v, want := range map[string]string{
+		"v0.1.0":       "greyman:v0.1.0",
+		"v0.1.0-rc.2":  "greyman:v0.1.0-rc.2",
+		"dev":          "greyman:latest",
+		"v0.1.0-dirty": "greyman:latest",
+	} {
+		if got := ImageFor(v); got != want {
+			t.Errorf("ImageFor(%q) = %q, want %q", v, got, want)
+		}
+	}
+}
+
+func TestBuildArgsBuildsTheTagItIsNamedFor(t *testing.T) {
+	got := BuildArgs("v0.1.0", "greyman:v0.1.0")
+	want := []string{"build", "-f", "docker/Dockerfile", "--build-arg", "VERSION=v0.1.0", "-t", "greyman:v0.1.0", Repo + "#v0.1.0"}
+	if !slices.Equal(got, want) {
+		t.Errorf("BuildArgs = %q, want %q", got, want)
+	}
+}

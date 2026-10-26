@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -14,7 +16,37 @@ import (
 	"greyman/internal/docker"
 	"greyman/internal/settings"
 	"greyman/internal/state"
+	"greyman/internal/version"
 )
+
+// confirm asks a y/N question on the terminal. With no terminal on stdin (an agent, a
+// pipe, /dev/null) it answers no without asking, so nothing waits on input that never comes. Tests
+// swap it.
+var confirm = func(e *Env, question string) bool {
+	if !isTerminal(os.Stdin) {
+		return false
+	}
+	fmt.Fprintf(e.Err, "%s [y/N] ", question)
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "y" || answer == "yes"
+}
+
+// buildMissing offers to build a release's own image, which the install script normally
+// builds. Declined or with no terminal, it prints the docker command instead. Any other
+// missing image is the user's to provide.
+func buildMissing(ctx context.Context, e *Env, image string) error {
+	v := version.Version
+	switch {
+	case image != docker.ImageFor(v):
+		return fmt.Errorf("image %s not found", image)
+	case !version.IsRelease(v):
+		return fmt.Errorf("image %s not found; build it from the repo root with:\n  docker build -f docker/Dockerfile --build-arg VERSION=%s -t %s .", image, v, image)
+	case !confirm(e, fmt.Sprintf("image %s not found. Build it now (~500 MB download, several minutes)?", image)):
+		return fmt.Errorf("image %s not found; build it (~500 MB download, several minutes) with:\n  docker %s", image, strings.Join(docker.BuildArgs(v, image), " "))
+	}
+	return docker.Build(ctx, v, image, e.Err)
+}
 
 // upFlagKeys maps the `up` flags to the settings they override.
 var upFlagKeys = map[string]string{
@@ -77,7 +109,9 @@ func cmdUp(ctx context.Context, e *Env, args []string) error {
 	}
 	image := cfg["IMAGE"].Val
 	if !docker.ImageExists(ctx, image) {
-		return fmt.Errorf("image %s not found; build it with `make image`", image)
+		if err := buildMissing(ctx, e, image); err != nil {
+			return err
+		}
 	}
 	// Without state the token is lost, so this container is unusable, but it may be a
 	// live session (another HOME, a deleted state file). Let the user decide.

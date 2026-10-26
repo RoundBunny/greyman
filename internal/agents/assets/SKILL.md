@@ -62,6 +62,6 @@ description: Control a containerized Chromium browser from the command line with
 | `SCREEN_H` | `1080` | browser window height in pixels |
 | `API_PORT` | `0` | host port for the daemon API on 127.0.0.1; `0` lets Docker pick |
 | `WATCH_PORT` | `0` | host port for the live view on 127.0.0.1; `0` lets Docker pick |
-| `IMAGE` | `greyman:latest` | Docker image to run |
+| `IMAGE` | `greyman:<version>` | Docker image to run |
 | `PLATFORM` | image's own | container platform such as `amd64` |
 

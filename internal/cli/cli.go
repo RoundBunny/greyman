@@ -38,7 +38,7 @@ type flagError struct{ error }
 
 // ungated commands run before any agent is installed. Every other command is gated
 // by default, so a new command cannot skip the check by accident.
-var ungated = map[string]bool{"install": true, "down": true, "config": true}
+var ungated = map[string]bool{"install": true, "down": true, "config": true, "version": true}
 
 func commands() []command {
 	return []command{
@@ -59,7 +59,20 @@ func commands() []command {
 		{"set", "greyman set <option> <args> [--setconfig]", "change a setting on the running browser, e.g. geolocation (--setconfig also saves it)", cmdSet},
 		{"config", "greyman config [list | get KEY | set KEY VALUE | unset KEY]", "show or change settings (applied on the next `up`)", cmdConfig},
 		{"install", "greyman install [claude|codex|cursor|copilot|all|other [dir]] [--force]", "install the greyman skill for a coding agent (no name: detect)", cmdInstall},
+		{"version", "greyman version", "print the CLI version", cmdVersion},
 	}
+}
+
+func cmdVersion(_ context.Context, e *Env, args []string) error {
+	pos, err := parse(newFlags("version", e, "greyman version"), args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 {
+		return usageError{"greyman version"}
+	}
+	fmt.Fprintln(e.Out, version.Version)
+	return nil
 }
 
 // Run executes one greyman invocation and returns the process exit code.
@@ -218,7 +231,11 @@ func checkVersion(daemon string) {
 		if daemon == "" {
 			running = "a build that predates version reporting"
 		}
-		fmt.Fprintf(versionWarn, "warning: greyman is %s but the container runs %s; run `greyman down`, rebuild or pull the matching image, then `greyman up`\n", version.Version, running)
+		fix := "`greyman down`, rebuild the image, then `greyman up`"
+		if version.IsRelease(version.Version) {
+			fix = "`greyman down`, then `greyman up` (it offers to build a missing image)"
+		}
+		fmt.Fprintf(versionWarn, "warning: greyman is %s but the container runs %s; run %s\n", version.Version, running, fix)
 	})
 }
 

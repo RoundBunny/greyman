@@ -306,7 +306,7 @@ func TestGate(t *testing.T) {
 }
 
 // New commands must be gated unless someone exempts them on purpose.
-func TestOnlyConfigInstallAndDownAreUngated(t *testing.T) {
+func TestOnlyConfigInstallDownAndVersionAreUngated(t *testing.T) {
 	var got []string
 	for _, c := range commands() {
 		if ungated[c.name] {
@@ -314,7 +314,7 @@ func TestOnlyConfigInstallAndDownAreUngated(t *testing.T) {
 		}
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"config", "down", "install"}) {
+	if !slices.Equal(got, []string{"config", "down", "install", "version"}) {
 		t.Fatalf("ungated commands = %v", got)
 	}
 }

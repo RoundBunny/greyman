@@ -14,14 +14,17 @@ import (
 	"testing"
 
 	"greyman/internal/config"
+	"greyman/internal/docker"
 	"greyman/internal/settings"
 	"greyman/internal/state"
+	"greyman/internal/version"
 )
 
 const fakeDockerScript = `#!/bin/sh
 echo "$*" >> "$FAKE_DOCKER_DIR/log"
 running=false; [ -f "$FAKE_DOCKER_DIR/running" ] && running=true
 case "$1" in
+  image) [ -n "$FAKE_DOCKER_NO_IMAGE" ] && exit 1; exit 0 ;;
   inspect) $running && { echo true; exit 0; }; echo "Error: No such object" >&2; exit 1 ;;
   ps) [ -n "$FAKE_DOCKER_PS_FAIL" ] && exit 1; $running && echo abc123; exit 0 ;;
   run) env | grep -E '^(GREYMAN_|TZ=)' | sort > "$FAKE_DOCKER_DIR/env"; echo abc123 ;;
@@ -43,6 +46,7 @@ func fakeDocker(t *testing.T) (dir string, calls func() []string) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
 	t.Setenv("FAKE_DOCKER_DIR", dir)
 	t.Setenv("FAKE_DOCKER_PS_FAIL", "")
+	t.Setenv("FAKE_DOCKER_NO_IMAGE", "")
 	return dir, func() []string {
 		b, _ := os.ReadFile(filepath.Join(dir, "log"))
 		return strings.Split(strings.TrimSpace(string(b)), "\n")
@@ -311,5 +315,77 @@ func TestUpWarnsAboutAnInvalidHostTZButStillStarts(t *testing.T) {
 	}
 	if indexOf(calls(), "run ", 0) < 0 {
 		t.Error("up must go ahead despite the warning")
+	}
+}
+
+// release makes this CLI release v and stubs the answer to the build prompt. It returns
+// the question asked, empty if none was.
+func release(t *testing.T, v string, yes bool) (asked *string) {
+	t.Helper()
+	oldV, oldConfirm := version.Version, confirm
+	asked = new(string)
+	version.Version = v
+	confirm = func(_ *Env, q string) bool { *asked = q; return yes }
+	t.Cleanup(func() { version.Version, confirm = oldV, oldConfirm })
+	return asked
+}
+
+func TestUpBuildsAMissingReleaseImageWhenTheUserAgrees(t *testing.T) {
+	setup(t)
+	_, calls := fakeDocker(t)
+	t.Setenv("FAKE_DOCKER_NO_IMAGE", "1")
+	asked := release(t, "v0.1.0", true)
+	run("up", "--image", "greyman:v0.1.0") // the fake container then fails to start; only the build matters
+	if !strings.Contains(*asked, "greyman:v0.1.0") {
+		t.Errorf("prompt = %q", *asked)
+	}
+	c := calls()
+	b := indexOf(c, "build ", 0)
+	if b < 0 || c[b] != strings.Join(docker.BuildArgs("v0.1.0", "greyman:v0.1.0"), " ") || indexOf(c, "run ", b) < 0 {
+		t.Errorf("want the release build, then run: %q", c)
+	}
+}
+
+func TestUpDoesNotBuildWithoutConsent(t *testing.T) {
+	setup(t)
+	_, calls := fakeDocker(t)
+	t.Setenv("FAKE_DOCKER_NO_IMAGE", "1")
+	release(t, "v0.1.0", false)
+	code, _, errs := run("up", "--image", "greyman:v0.1.0")
+	cmd := "docker build -f docker/Dockerfile --build-arg VERSION=v0.1.0 -t greyman:v0.1.0 " + docker.Repo + "#v0.1.0"
+	if code != 1 || !strings.Contains(errs, "\n  "+cmd+"\n") {
+		t.Fatalf("code=%d err=%q", code, errs)
+	}
+	for _, prefix := range []string{"build", "run"} {
+		if indexOf(calls(), prefix, 0) >= 0 {
+			t.Errorf("up ran `docker %s…`: %q", prefix, calls())
+		}
+	}
+}
+
+func TestUpOffersToBuildOnlyItsOwnReleaseImage(t *testing.T) {
+	setup(t)
+	_, calls := fakeDocker(t)
+	t.Setenv("FAKE_DOCKER_NO_IMAGE", "1")
+	asked := release(t, "v0.1.0", true)
+	code, _, errs := run("up", "--image", "greyman:v0.0.9")
+	if code != 1 || strings.TrimSpace(errs) != "error: image greyman:v0.0.9 not found" {
+		t.Errorf("other image: code=%d err=%q", code, errs)
+	}
+	version.Version = "dev"
+	code, _, errs = run("up")
+	if code != 1 || !strings.Contains(errs, "docker build -f docker/Dockerfile --build-arg VERSION=dev -t greyman:latest .") {
+		t.Errorf("dev build: code=%d err=%q", code, errs)
+	}
+	if *asked != "" || indexOf(calls(), "build", 0) >= 0 {
+		t.Errorf("asked %q, calls %q", *asked, calls())
+	}
+}
+
+func TestVersionRunsBeforeInstall(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	code, out, _ := run("version")
+	if code != 0 || out != version.Version+"\n" {
+		t.Fatalf("code=%d out=%q", code, out)
 	}
 }

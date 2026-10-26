@@ -6,20 +6,51 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"greyman/internal/version"
 )
 
 const (
-	Name         = "greyman"
-	Volume       = "greyman-profile"
-	DefaultImage = "greyman:latest"
-	apiPort      = "7777"
-	watchPort    = "6080"
+	Name      = "greyman"
+	Volume    = "greyman-profile"
+	Repo      = "https://github.com/RoundBunny/greyman.git" // build context for release images
+	apiPort   = "7777"
+	watchPort = "6080"
 )
+
+// DefaultImage is the image this CLI runs unless IMAGE says otherwise.
+var DefaultImage = ImageFor(version.Version)
+
+// ImageFor is the image a CLI of version v runs by default: a release runs its own tag,
+// built by the install script (or by `up`); a dev build runs the `make image` output.
+func ImageFor(v string) string {
+	if version.IsRelease(v) {
+		return "greyman:" + v
+	}
+	return "greyman:latest"
+}
+
+// BuildArgs builds release v's image from its tag on GitHub. Pure, so it can be unit tested.
+func BuildArgs(v, image string) []string {
+	return []string{"build", "-f", "docker/Dockerfile", "--build-arg", "VERSION=" + v, "-t", image, Repo + "#" + v}
+}
+
+// Build runs BuildArgs, streaming docker's progress to out.
+func Build(ctx context.Context, v, image string, out io.Writer) error {
+	cmd := exec.CommandContext(ctx, "docker", BuildArgs(v, image)...)
+	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=1")
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("docker build: %w", err)
+	}
+	return nil
+}
 
 type RunOpts struct {
 	Image    string
